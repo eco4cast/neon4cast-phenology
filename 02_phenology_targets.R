@@ -1,23 +1,4 @@
-##' Download Phenocam data
-##'
-##' @param URL  web address where data is archived
-##' @export
-download.phenocam <- function(URL) {
-  ## check that we've been passed a URL
-  if (length(URL) == 1 & is.character(URL) & substr(URL,1,4)=="http") {
-    
-    ## read data
-    dat <- read.csv(URL,skip = 22)
-    
-    ## convert date
-    dat$date <- as.Date(as.character(dat$date))
-    
-    return(dat)
-  } else {
-    print(paste("download.phenocam: Input URL not provided correctly",URL))
-  }
-}
-
+source("downloadPhenoCam.R")
 ##Selected Sites for Challenge
 siteIDs <- c("NEON.D01.HARV.DP1.00033","NEON.D01.BART.DP1.00033","NEON.D02.SCBI.DP1.00033",
              "NEON.D05.STEI.DP1.00033","NEON.D06.UKFS.DP1.00033","NEON.D07.GRSM.DP1.00033",
