@@ -31,7 +31,7 @@ readr::write_csv(allData, "phenology-targets.csv.gz")
 
 ## Publish the targets to EFI.  Assumes aws.s3 env vars are configured.
 source("../neon4cast-shared-utilities/publish.R")
-publish(code = c("phenology_workflow.R", "downloadPhenoCam.R"),
+publish(code = c("phenology-workflow.R", "downloadPhenoCam.R"),
         data_out = c("phenology-targets.csv.gz"),
         prefix = "phenology/",
         bucket = "targets")
