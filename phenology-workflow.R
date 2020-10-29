@@ -36,8 +36,15 @@ publish(code = c("phenology-workflow.R", "downloadPhenoCam.R"),
         prefix = "phenology/",
         bucket = "targets")
 
+message(paste0("Completed downloading and generating phenology targets ", Sys.time()))
+
+
+#message(paste0("Running null model ", Sys.time()))
+
 ### Adding null model generation here
 #source("03_phenology_null)
+
+#message(paste0("Completed null model generation ", Sys.time()))
 
 
 
