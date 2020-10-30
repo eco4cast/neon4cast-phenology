@@ -1,7 +1,11 @@
 
 renv::restore()
-
+#remotes::install_github("cboettig/prov")
+#library(remotes)
 library(tidyverse)
+#library(contentid)
+#library(prov)
+#library(aws.s3)
 
 source("downloadPhenoCam.R")
 
