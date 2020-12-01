@@ -15,7 +15,11 @@ message(paste0("Downloading and generating phenology targets ", Sys.time()))
 
 for(i in 1:length(siteIDs)){
   siteName <- siteIDs[i]
+  if(siteName != "NEON.D11.CLBJ.DP1.00033"){
   URL <- paste('https://phenocam.sr.unh.edu/data/archive/',siteName,"/ROI/",siteName,"_DB_1000_1day.csv",sep="")
+  }else{
+    URL <- paste('https://phenocam.sr.unh.edu/data/archive/',siteName,"/ROI/",siteName,"_DB_2000_1day.csv",sep="")
+  }
   phenoData <- download.phenocam(URL = URL)
   subPhenoData <- phenoData %>% 
     mutate(siteID = stringr::str_sub(siteName, 10, 13), 
