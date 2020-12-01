@@ -3,6 +3,7 @@ library(tidyverse)
 
 
 source("downloadPhenoCam.R")
+source("calculatePhenoCamUncertainty.R")
 
 ##Selected Sites for Challenge
 siteIDs <- c("NEON.D01.HARV.DP1.00033","NEON.D01.BART.DP1.00033","NEON.D02.SCBI.DP1.00033",
@@ -15,12 +16,17 @@ message(paste0("Downloading and generating phenology targets ", Sys.time()))
 
 for(i in 1:length(siteIDs)){
   siteName <- siteIDs[i]
-  URL <- paste('https://phenocam.sr.unh.edu/data/archive/',siteName,"/ROI/",siteName,"_DB_1000_1day.csv",sep="")
-  phenoData <- download.phenocam(URL = URL)
+  URL_gcc90 <- paste('https://phenocam.sr.unh.edu/data/archive/',siteName,"/ROI/",siteName,"_DB_1000_1day.csv",sep="") ##URL for daily summary statistics
+  URL_individual <- paste('https://phenocam.sr.unh.edu/data/archive/',siteName,"/ROI/",siteName,"_DB_1000_roistats.csv",sep="") ##URL for individual image metrics
+  phenoData <- download.phenocam(URL = URL_gcc90)
+  dates <- unique(phenoData$date)
+  phenoData_individual <- download.phenocam(URL=URL_individual,skipNum = 17)
+  gcc_sd <- calculate.phenocam.uncertainty(dat=phenoData_individual,dates=dates) ##Calculates standard deviations on daily gcc90 values
   subPhenoData <- phenoData %>% 
     mutate(siteID = stringr::str_sub(siteName, 10, 13), 
            time = date) %>% 
-    select(time, siteID, gcc_mean, gcc_std)
+    select(time, siteID, gcc_90)
+  subPhenoData <- cbind(subPhenoData,gcc_sd)
     
   allData <- rbind(allData,subPhenoData)
     
