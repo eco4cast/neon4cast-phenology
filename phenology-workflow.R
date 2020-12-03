@@ -53,9 +53,16 @@ message(paste0("Completed downloading and generating phenology targets ", Sys.ti
 #message(paste0("Running null model ", Sys.time()))
 
 ### Adding null model generation here
-#source("03_phenology_null)
+source("nullModel_randomWalk_main.R")
 
-#message(paste0("Completed null model generation ", Sys.time()))
+## Publish the targets to EFI.  Assumes aws.s3 env vars are configured.
+source("../neon4cast-shared-utilities/publish.R")
+publish(code = c("phenology-workflow.R", "nullModel_randomWalk_main.R", "randomWalkNullModelFunction.R"),
+        data_out = c(forecast_file_name),
+        prefix = "phenology/",
+        bucket = "forecasts")
+
+message(paste0("Completed null model generation ", Sys.time()))
 
 
 
