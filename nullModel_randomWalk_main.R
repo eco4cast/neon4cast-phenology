@@ -11,8 +11,8 @@ phenoDat <- read.csv("phenology-targets.csv.gz",header=TRUE)
 sites <- unique(as.character(phenoDat$siteID))
 
 forecast_length <- 35
-predictions <- array(NA, dim = c(forecast_length, 1000, length(sites)))
-parameters <- array(NA, dim = c(1000, length(sites)))
+predictions <- array(NA, dim = c(forecast_length, length(sites), 1000))
+parameters <- array(NA, dim = c(length(sites),1000))
 
 for(i in 1:length(sites)){
   
@@ -22,12 +22,16 @@ for(i in 1:length(sites)){
   
   sitePhenoDat <- phenoDat[phenoDat$siteID==sites[i],]
   sitePhenoDat$time <- lubridate::as_date(sitePhenoDat$time)
+  
+  sitePhenoDat <- sitePhenoDat
   full_time <- tibble::tibble(time = seq(min(sitePhenoDat$time), max(sitePhenoDat$time) + lubridate::days(forecast_length), by = "1 day")) 
   forecast_start_index <- which(full_time$time == max(sitePhenoDat$time) + lubridate::days(1))
   d <- tibble::tibble(time = sitePhenoDat$time,
                       p=as.numeric(sitePhenoDat$gcc_90),
                       p.prec=1/((as.numeric(sitePhenoDat$gcc_sd))^2)) 
   d <- dplyr::full_join(d, full_time)
+  
+  
   #gap fill the missing precisions by assigning them the average sd for the site
   d$p.prec[!is.finite(d$p.prec)] <- NA
   d$p.prec[is.na(d$p.prec)] <- mean(d$p.prec,na.rm=TRUE)
@@ -66,8 +70,8 @@ for(i in 1:length(sites)){
   out.burn2$predict <- window(out.burn$predict,thin=thinAmount)
   out.burn <- out.burn2
   
-  predictions[, , i] <- as.matrix(out.burn$predict)[ ,forecast_start_index:length(d$time)]
-  parameters[ ,i] <- as.matrix(out.burn$params)
+  predictions[, i , ] <- as.matrix(out.burn$predict)[ ,forecast_start_index:length(d$time)]
+  parameters[i ,] <- as.matrix(out.burn$params)
   
 }
 
@@ -112,11 +116,11 @@ udunits2::ud.is.parseable(sitedim$units)
 def_list <- list()
 def_list[[1]] <- ncvar_def(name = "gcc_90",
                            units = "",
-                           dim = list(ensdim,timedim,sitedim),
+                           dim = list(timedim, sitedim, ensdim),
                            longname = "90% quantile of daily green chromatic coordinate")
 def_list[[2]] <- ncvar_def(name = "p.proc",
                            units = "",
-                           dim = list(ensdim, sitedim),
+                           dim = list(sitedim, ensdim),
                            longname = "Process precision parameter")
 def_list[[3]] <- ncvar_def(name = "siteID",
                            units = "",
@@ -126,7 +130,7 @@ def_list[[3]] <- ncvar_def(name = "siteID",
 
 ###Open netCDF file
 
-forecast_file_name <- paste0("phenology-",lubridate::as_date(forecast_time[1] - lubridate::days(1)),"-",team_name,".nc")
+forecast_file_name <- paste0("phenology-",lubridate::as_date(forecast_time[1]),"-",team_name,".nc")
 
 ncout <- nc_create(forecast_file_name,def_list,force_v4=T)
 
