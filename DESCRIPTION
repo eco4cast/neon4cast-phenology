@@ -1,0 +1,5 @@
+Package: terrestrial_fluxes
+Version: 0.1.0
+Imports: tidyverse, lubridate, jsonlite, ecoforecastR,
+         contentid, aws.s3, prov, EML, yaml, rjags, tidybayes, EFIstandards 
+Remotes: cboettig/prov, cboettig/contentid, eco4cast/EFIstandards, EcoForecast/ecoforecastR
