@@ -1,5 +1,5 @@
 
-devtools::install_deps()
+remotes::install_deps()
 
 library(tidyverse)
 
@@ -12,12 +12,15 @@ siteIDs <- c("NEON.D01.HARV.DP1.00033","NEON.D01.BART.DP1.00033","NEON.D02.SCBI.
              "NEON.D05.STEI.DP1.00033","NEON.D06.UKFS.DP1.00033","NEON.D07.GRSM.DP1.00033",
              "NEON.D08.DELA.DP1.00033","NEON.D11.CLBJ.DP1.00033")
 
+site_names <- c("HARV", "BART", "SCBI", "STEI", "UKFS", "GRSM", "DELA", "CLBJ")
+
 allData <- data.frame(matrix(nrow = 0, ncol = 5))
 
 message(paste0("Downloading and generating phenology targets ", Sys.time()))
 
 for(i in 1:length(siteIDs)){
   siteName <- siteIDs[i]
+  message(siteName)
   if(siteName != "NEON.D11.CLBJ.DP1.00033"){
   URL_gcc90 <- paste('https://phenocam.sr.unh.edu/data/archive/',siteName,"/ROI/",siteName,"_DB_1000_1day.csv",sep="") ##URL for daily summary statistics
   URL_individual <- paste('https://phenocam.sr.unh.edu/data/archive/',siteName,"/ROI/",siteName,"_DB_1000_roistats.csv",sep="") ##URL for individual image metrics

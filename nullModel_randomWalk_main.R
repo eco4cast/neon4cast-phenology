@@ -1,83 +1,173 @@
 library("rjags")
 library("ecoforecastR")
 library("ncdf4")
+library("tidybayes")
+library("tidyverse")
 
 source("randomWalkNullModelFunction.R")
 ###Random WalkNull Model Calculations
-####Note: Currently this is not set up to run iteratively because I am not sure how the challenge is planning on doing this. 
+####Note: Currently this is not set up to run iteratively because I am not sure how the challenge is planning on doing this.
 ####Note (continued): Hopefully someone who knows about how this will be done can use this code to do that
+
+generate_plots <- TRUE
+team_name <- "EFInull"
+
+download.file("https://data.ecoforecast.org/targets/phenology/phenology-targets.csv.gz",
+              "phenology-targets.csv.gz")
 
 phenoDat <- read.csv("phenology-targets.csv.gz",header=TRUE)
 sites <- unique(as.character(phenoDat$siteID))
 
 forecast_length <- 35
-predictions <- array(NA, dim = c(forecast_length, length(sites), 1000))
+predictions <- array(NA, dim = c(forecast_length, length(sites), 2000))
 parameters <- array(NA, dim = c(length(sites),1000))
 
-for(i in 1:length(sites)){
+
+#'Generic random walk state-space model is JAGS format.  We use this model for
+#'both the oxygen and temperature null forecasts
+RandomWalk = "
+model{
+  # Priors
+  x[1] ~ dnorm(x_ic,tau_add)
+  tau_obs[1] <- 1 / pow(sd_obs[1], 2)
+  y[1] ~ dnorm(x[1],tau_obs[1])
+
+  sd_add  ~ dunif(0.000001, 100)
+  tau_add <- 1/ pow(sd_add, 2)
+
+  # Process Model
+  for(t in 2:N){
+    x[t] ~ dnorm(x[t-1], tau_add)
+    tau_obs[t] <- 1 / pow(sd_obs[t], 2)
+    y[t] ~ dnorm(x[t], tau_obs[t])
+  }
+}
+"
+
+forecast_saved <- NULL
+
+for(s in 1:length(sites)){
   
-  message(paste0("forecasting site: ",sites[i]))
+  message(paste0("forecasting site: ",sites[s]))
   
   forecast_length <- 35
   
-  sitePhenoDat <- phenoDat[phenoDat$siteID==sites[i],]
+  
+  
+  sitePhenoDat <- phenoDat[phenoDat$siteID==sites[s],]
   sitePhenoDat$time <- lubridate::as_date(sitePhenoDat$time)
   
+  start_forecast <- max(sitePhenoDat$time) + lubridate::days(1)
+  
   sitePhenoDat <- sitePhenoDat
-  full_time <- tibble::tibble(time = seq(min(sitePhenoDat$time), max(sitePhenoDat$time) + lubridate::days(forecast_length), by = "1 day")) 
+  full_time <- tibble::tibble(time = seq(min(sitePhenoDat$time), max(sitePhenoDat$time) + lubridate::days(forecast_length), by = "1 day"))
   forecast_start_index <- which(full_time$time == max(sitePhenoDat$time) + lubridate::days(1))
   d <- tibble::tibble(time = sitePhenoDat$time,
                       p=as.numeric(sitePhenoDat$gcc_90),
-                      p.prec=1/((as.numeric(sitePhenoDat$gcc_sd))^2)) 
+                      p.sd=as.numeric(sitePhenoDat$gcc_sd))
   d <- dplyr::full_join(d, full_time)
+  
+  ggplot(d, aes(x = time, y = p)) +
+    geom_point()
   
   
   #gap fill the missing precisions by assigning them the average sd for the site
-  d$p.prec[!is.finite(d$p.prec)] <- NA
-  d$p.prec[is.na(d$p.prec)] <- mean(d$p.prec,na.rm=TRUE)
+  d$p.sd[!is.finite(d$p.sd)] <- NA
+  d$p.sd[is.na(d$p.sd)] <- mean(d$p.sd,na.rm=TRUE)
+  d$p.sd[d$p.sd == 0.0] <- min(d$p.sd[d$p.sd != 0.0])
   d$N <- length(d$p)
-  data <- list(p = d$p,
-               p.prec = d$p.prec,
-               N = length( d$p))
-  j.model <- randomWalkPhenoModel(data=data,nchain=5,priorCal=FALSE)
-  variableNames <- c("x","p.proc") #x is the latent variable of gcc_90 and p.proc is the process precision 
-  jags.out   <- coda.samples (model = j.model,
-                              variable.names = variableNames,
-                              n.iter = 20000)
+  data <- list(y = d$p,
+               sd_obs = d$p.sd,
+               N = length(d$p),
+               x_ic = 0.3)
   
-  #Split output into parameters and state variables and calculat/remove burnin 
-  out = list(params=NULL,predict=NULL) 
-  mfit = as.matrix(jags.out,chains=TRUE)
-  pred.cols = grep("x[",colnames(mfit),fixed=TRUE)
-  chain.col = which(colnames(mfit)=="CHAIN")
-  out$params = ecoforecastR::mat2mcmc.list(mfit[,-pred.cols])
-  GBR <- gelman.plot(out$params)
-  burnin <- GBR$last.iter[tail(which(any(GBR$shrink[,,2]>1.05,1)),1)+1]
+  init_x <- approx(x = d$time[!is.na(d$p)], y = d$p[!is.na(d$p)], xout = d$time, rule = 2)$y
   
-  var.burn <- window(jags.out,start=burnin)
-  out.burn = list(params=NULL,predict=NULL)
-  mfit = as.matrix(var.burn,chains=TRUE)
-  pred.cols = grep("x[",colnames(mfit),fixed=TRUE)
-  chain.col = which(colnames(mfit)=="CHAIN")
-  out.burn$params = ecoforecastR::mat2mcmc.list(mfit[,-pred.cols])
-  out.burn$predict = ecoforecastR::mat2mcmc.list(mfit[,c(chain.col,pred.cols)])
   
-  ##Thin (not sure what the standards think about this)
-  out.mat <- as.matrix(out.burn$params)
-  thinAmount <- round(nrow(out.mat)/1000,digits=0)
-  out.burn2 <- list()
-  out.burn2$params <- window(out.burn$params,thin=thinAmount)
-  out.burn2$predict <- window(out.burn$predict,thin=thinAmount)
-  out.burn <- out.burn2
+  #Initialize parameters
+  nchain = 3
+  chain_seeds <- c(200,800,1400)
+  init <- list()
+  for(i in 1:nchain){
+    init[[i]] <- list(sd_add = sd(diff(data$y[!is.na(data$y)])),
+                      .RNG.name = "base::Wichmann-Hill",
+                      .RNG.seed = chain_seeds[i],
+                      x = init_x)
+  }
   
-  predictions[, i , ] <- as.matrix(out.burn$predict)[ ,forecast_start_index:length(d$time)]
-  parameters[i ,] <- as.matrix(out.burn$params)
+  
+  
+  j.model   <- jags.model(file = textConnection(RandomWalk),
+                          data = data,
+                          inits = init,
+                          n.chains = 3)
+  
+  
+  #Run JAGS model as the burn-in
+  jags.out   <- coda.samples(model = j.model,variable.names = c("sd_add"), n.iter = 10000)
+  
+  #Run JAGS model again and sample from the posteriors
+  m   <- coda.samples(model = j.model,
+                      variable.names = c("x","sd_add", "y"),
+                      n.iter = 10000,
+                      thin = 5)
+  
+  #Use TidyBayes package to clean up the JAGS output
+  model_output <- m %>%
+    spread_draws(y[day]) %>%
+    filter(.chain == 1) %>%
+    rename(ensemble = .iteration) %>%
+    mutate(time = full_time$time[day]) %>%
+    ungroup() %>%
+    select(time, y, ensemble)
+  
+  
+  
+  if(generate_plots){
+    #Pull in the observed data for plotting
+    obs <- tibble(time = d$time,
+                  obs = d$p)
+    
+    
+    #Post past and future
+    model_output %>%
+      group_by(time) %>%
+      summarise(mean = mean(y),
+                upper = quantile(y, 0.975),
+                lower = quantile(y, 0.025),.groups = "drop") %>%
+      ggplot(aes(x = time, y = mean)) +
+      geom_line() +
+      geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.2, color = "lightblue", fill = "lightblue") +
+      geom_point(data = obs, aes(x = time, y = obs), color = "red") +
+      labs(x = "Date", y = "oxygen")
+    
+    ggsave(paste0("phenology_",site_names[s],"_figure.pdf"), device = "pdf")
+  }
+  
+  #Filter only the forecasted dates and add columns for required variable
+  forecast_saved_tmp <- model_output %>%
+    filter(time >= start_forecast) %>%
+    rename(gcc_90 = y) %>%
+    mutate(data_assimilation = 0,
+           forecast = 1,
+           obs_flag = 2,
+           siteID = site_names[s]) %>%
+    mutate(forecast_iteration_id = start_forecast) %>%
+    mutate(forecast_project_id = team_name)
+  
+  
+  predictions[ ,s , ] <- forecast_saved_tmp %>%
+    pivot_wider(names_from = ensemble, values_from = gcc_90) %>%
+    select(-c("data_assimilation","forecast", "obs_flag", "siteID", "forecast_iteration_id", "forecast_project_id","time")) %>%
+    as.matrix()
+  
+  
+  # Combined with the previous sites
+  forecast_saved <- rbind(forecast_saved, forecast_saved_tmp)
   
 }
 
-team_name <- "EFInull"
-
-forecast_time <- d$time[forecast_start_index:length(d$time)]
+forecast_time <- unique(forecast_saved$time)
 
 ##Put in EFI standard form (based on EFI standards logistic-metadata-example vignette)
 ##Forecast Identifiers (please change to what is needed)
@@ -98,7 +188,7 @@ timedim <- ncdim_def("time",
                      longname='time')
 ensdim <- ncdim_def("ensemble",
                     units="",
-                    vals=1:nrow(as.matrix(out.burn$params)),
+                    vals=1:dim(predictions)[3],
                     longname = "ensemble member")
 
 sitedim <- ncdim_def("site",
@@ -118,11 +208,11 @@ def_list[[1]] <- ncvar_def(name = "gcc_90",
                            units = "",
                            dim = list(timedim, sitedim, ensdim),
                            longname = "90% quantile of daily green chromatic coordinate")
-def_list[[2]] <- ncvar_def(name = "p.proc",
-                           units = "",
-                           dim = list(sitedim, ensdim),
-                           longname = "Process precision parameter")
-def_list[[3]] <- ncvar_def(name = "siteID",
+#def_list[[2]] <- ncvar_def(name = "p.proc",
+#                           units = "",
+#                           dim = list(sitedim, ensdim),
+#                           longname = "Process precision parameter")
+def_list[[2]] <- ncvar_def(name = "siteID",
                            units = "",
                            dim = list(dimnchar, sitedim),
                            longname = "siteID",
@@ -136,14 +226,14 @@ ncout <- nc_create(forecast_file_name,def_list,force_v4=T)
 
 ###Fill in output data
 ncvar_put(ncout,def_list[[1]], predictions) #Forecasted gcc_90
-ncvar_put(ncout,def_list[[2]], parameters) #Forecasted parameter values
-ncvar_put(ncout,def_list[[3]], sites) #Forecasted parameter values
+#ncvar_put(ncout,def_list[[2]], parameters) #Forecasted parameter values
+ncvar_put(ncout,def_list[[2]], sites) #Forecasted parameter values
 
 ## Global attributes (metadata)
-ncatt_put(ncout,0,"forecast_project_id", as.character(forecast_project_id), 
+ncatt_put(ncout,0,"forecast_project_id", as.character(forecast_project_id),
           prec =  "text")
-ncatt_put(ncout,0,"forecast_model_id",as.character(forecast_model_id), 
+ncatt_put(ncout,0,"forecast_model_id",as.character(forecast_model_id),
           prec =  "text")
-ncatt_put(ncout,0,"forecast_iteration_id",as.character(forecast_iteration_id), 
+ncatt_put(ncout,0,"forecast_iteration_id",as.character(forecast_iteration_id),
           prec =  "text")
 nc_close(ncout)   ## make sure to close the file
