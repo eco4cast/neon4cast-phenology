@@ -43,6 +43,21 @@ for(i in 1:length(siteIDs)){
     
 }
 
+full_time <- seq(min(allData$time),max(allData$time), by = "1 day")
+
+full_time <- tibble(time = rep(full_time, 8),
+                    siteID = c(rep("HARV", length(full_time)),
+                               rep("BART", length(full_time)),
+                               rep("SCBI", length(full_time)),
+                               rep("STEI", length(full_time)),
+                               rep("UKFS", length(full_time)),
+                               rep("GRSM", length(full_time)),
+                               rep("DELA", length(full_time)),
+                               rep("CLBJ", length(full_time))))
+
+
+allData <- left_join(full_time, allData, by = c("time", "siteID"))
+
 readr::write_csv(allData, "phenology-targets.csv.gz")
 
 ## Publish the targets to EFI.  Assumes aws.s3 env vars are configured.
