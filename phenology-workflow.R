@@ -32,12 +32,13 @@ for(i in 1:length(siteIDs)){
   dates <- unique(phenoData$date)
   phenoData_individual <- download.phenocam(URL=URL_individual,skipNum = 17)
   gcc_sd <- calculate.phenocam.uncertainty(dat=phenoData_individual,dates=dates) ##Calculates standard deviations on daily gcc90 values
+  rcc_sd <- calculate.phenocam.uncertainty(dat=phenoData_individual,dates=dates,target="rcc")
 
   subPhenoData <- phenoData %>% 
     mutate(siteID = stringr::str_sub(siteName, 10, 13), 
            time = date) %>% 
-    select(time, siteID, gcc_90)
-  subPhenoData <- cbind(subPhenoData,gcc_sd)
+    select(time, siteID, gcc_90, rcc_90)
+  subPhenoData <- cbind(subPhenoData,gcc_sd,rcc_sd)
     
   allData <- rbind(allData,subPhenoData)
     
