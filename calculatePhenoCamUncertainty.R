@@ -15,9 +15,9 @@ calculate.phenocam.uncertainty <- function(dat,dates,target="gcc") {
       for(j in 1:nboot){
         gcc_90s[j] <- quantile(dailyDat[,target][sample(x = 1:nrows,size = nrows,replace = T)],0.90)
       }
-      sds[d] <- sd(gcc_90s)
+      sds <- sd(gcc_90s)
     }else{
-      sds[d] <- NA
+      sds <- NA
     }
   }
   return(sds)

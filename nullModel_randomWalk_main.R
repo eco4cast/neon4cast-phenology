@@ -57,10 +57,13 @@ for(s in 1:length(sites)){
   sitePhenoDat <- phenoDat[phenoDat$siteID==sites[s],]
   sitePhenoDat$time <- lubridate::as_date(sitePhenoDat$time)
   
-  start_forecast <- max(sitePhenoDat$time) + lubridate::days(1)
+  
+  #start_forecast <- max(sitePhenoDat$time) + lubridate::days(1)
+  start_forecast <- Sys.Date() + lubridate::days(1)
   
   sitePhenoDat <- sitePhenoDat
-  full_time <- tibble::tibble(time = seq(min(sitePhenoDat$time), max(sitePhenoDat$time) + lubridate::days(forecast_length), by = "1 day"))
+  #full_time <- tibble::tibble(time = seq(min(sitePhenoDat$time), max(sitePhenoDat$time) + lubridate::days(forecast_length), by = "1 day"))
+  full_time <- tibble::tibble(time = seq(min(sitePhenoDat$time), Sys.Date()  + lubridate::days(forecast_length), by = "1 day"))
   forecast_start_index <- which(full_time$time == max(sitePhenoDat$time) + lubridate::days(1))
   d <- tibble::tibble(time = sitePhenoDat$time,
                       p=as.numeric(sitePhenoDat$gcc_90),
@@ -126,7 +129,9 @@ for(s in 1:length(sites)){
   if(generate_plots){
     #Pull in the observed data for plotting
     obs <- tibble(time = d$time,
-                  obs = d$p)
+                  obs = d$p) %>% 
+      filter(time >= max(sitePhenoDat$time))
+      
     
     
     #Post past and future
@@ -135,11 +140,12 @@ for(s in 1:length(sites)){
       summarise(mean = mean(y),
                 upper = quantile(y, 0.975),
                 lower = quantile(y, 0.025),.groups = "drop") %>%
+      filter(time >= max(sitePhenoDat$time) ) %>%
       ggplot(aes(x = time, y = mean)) +
       geom_line() +
       geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.2, color = "lightblue", fill = "lightblue") +
       geom_point(data = obs, aes(x = time, y = obs), color = "red") +
-      labs(x = "Date", y = "oxygen")
+      labs(x = "Date", y = "gcc_90")
     
     ggsave(paste0("phenology_",site_names[s],"_figure.pdf"), device = "pdf")
   }

@@ -1,5 +1,5 @@
 
-remotes::install_deps()
+#remotes::install_deps()
 
 library(tidyverse)
 
@@ -70,7 +70,6 @@ publish(code = c("phenology-workflow.R", "downloadPhenoCam.R"),
 
 message(paste0("Completed downloading and generating phenology targets ", Sys.time()))
 
-
 #message(paste0("Running null model ", Sys.time()))
 
 ### Adding null model generation here
@@ -81,7 +80,8 @@ source("../neon4cast-shared-utilities/publish.R")
 publish(code = c("phenology-workflow.R", "nullModel_randomWalk_main.R", "randomWalkNullModelFunction.R"),
         data_out = c(forecast_file_name),
         prefix = "phenology/",
-        bucket = "forecasts")
+        bucket = "forecasts",
+        registries = "https://hash-archive.carlboettiger.info")
 
 message(paste0("Completed null model generation ", Sys.time()))
 
