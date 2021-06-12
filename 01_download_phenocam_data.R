@@ -68,4 +68,4 @@ publish(code = c("phenology-workflow.R", "downloadPhenoCam.R"),
         data_out = c("phenology-targets.csv.gz"),
         prefix = "phenology/",
         bucket = "targets",
-        registries = "https://hash-archive.thelio.carlboettiger.info")
+        registries = "https://hash-archive.carlboettiger.info")
