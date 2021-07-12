@@ -22,7 +22,7 @@ for(tm in 1:length(tms)){
   tmDat <- submittedForecasts[submittedForecasts$team==tms[tm],] #Subset by team
   for(s in 1:length(site_names)){
     tmSitDat <- tmDat[tmDat$siteID==site_names[s],] #Subset by site
-    for(t in c(2,4,6)){ #Loops over the transition dates
+    for(t in c(2,5,8)){ #Loops over the transition dates
       tranDate <- as.Date(allTransitions[s,t],origin=as.Date("2020-12-31"))
       vl <- allTransitions[s,(t+1)]
       
