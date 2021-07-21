@@ -7,8 +7,9 @@ library(zoo)
 ##Note: allData comes from the targets script (01_download_phenocam_data.R). I do not know where this is saved. 
 
 site_names <- c("HARV", "BART", "SCBI", "STEI", "UKFS", "GRSM", "DELA", "CLBJ")
-allTransitions <- data.frame(matrix(ncol=11,nrow=length(site_names)))
-colnames(allTransitions) <- c("siteID","day15","value15","sd15","day50","value50","sd50","day85","value85","sd85","rangeLength")
+allTransitions <- data.frame(matrix(ncol=13,nrow=length(site_names)))
+colnames(allTransitions) <- c("siteID","day15","value15","sd15","day50","value50","sd50","day85","value85","sd85","rangeLength",
+                              "minimum","maximum")
 allTransitions$siteID <- site_names
 desiredTransitions <- c(0.15,0.5,0.85)
 
@@ -29,12 +30,14 @@ for(s in 1:length(site_names)){
     sds <- c(sds,sd(outE$uncertainty$predicted[newDy,]))
     transitionDys <- c(transitionDys,newDy)
   }
-  # PhenoPlot(outE,"GCC",main=site_names[s])
-  # points(p)
+  # PhenoPlot(outE,"GCC",main=site_names[s],ylab="GCC",xlab="Day of Year")
+  # points(p,pch=20)
   # abline(v=transitionDys,col="red")
   allTransitions[s,c(2,5,8)] <- transitionDys
   allTransitions[s,c(3,6,9,11)] <- c(vls,diff(outE$fit$sf))
   allTransitions[s,c(4,7,10)] <- sds
+  allTransitions$minimum[s] <- min(outE$fit$predicted)
+  allTransitions$maximum[s] <- max(outE$fit$predicted)
 }
 
 write.csv(allTransitions,file="allPhenologyTransitionData.csv",row.names = FALSE)
