@@ -55,6 +55,8 @@ write_csv(combined, file = "~/Documents/scripts/neon4cast-phenology/combined_for
 
 aws.s3::put_object("~/Documents/scripts/neon4cast-phenology/combined_forecasts.csv", object = "not_in_standard/phenology_combined_forecasts.csv",bucket = "forecasts")
 
+combined <- read_csv("~/Documents/scripts/neon4cast-phenology/combined_forecasts.csv")
+
 write_csv(combined, file = "/efi_neon_challenge/forecasts/not_in_standard/combined_forecasts.csv")
 
 obs <- read_csv("/efi_neon_challenge/targets/phenology/phenology-targets.csv.gz") %>% 
