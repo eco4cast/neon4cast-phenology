@@ -1,0 +1,168 @@
+#####
+#See https://shorturl.at/irMQW for a guide to all the options below
+####
+team_name: climatology
+# ids are optional except for the first author, who is also the 'contact'
+team_list:    
+  - individualName:
+      givenName: Quinn
+      surName: Thomas 
+      id: rqthomas@vt.edu
+#You should not add anything on the metadata and forecast lines (next two lines should only say metadata and forecast)      
+metadata:
+  forecast:
+    timestep: 1 day #time step of model
+    forecast_horizon: 35 days #number of time steps in the future
+#You should not add anything on the model_description lines (next line should only say model_description)      
+    model_description:
+      # model identifier:
+      forecast_model_id: "climatology"
+      name: historical climatology
+      type: empirical. #General type of model empirical, machine learning, process
+      repository: www.github.com/eco4cast/neon4cast-phenology  # put your GitHub Repository in here
+#
+#INITIAL CONDITIONS      
+#Uncertainty in the initialization of state variables (Y). Initial condition 
+#uncertainty will be a common feature of any dynamic model, where the future 
+#state depends on the current state, such as population models, process-based 
+#biogeochemical pool & flux models, and classic time-series analysis. 
+#
+#complexity = number of state variables in the model. Examples of this would be the number of
+#species in a community model, number of age/size classes in a population model, 
+#number of pools in a biogeochemical model.
+    initial_conditions:
+      status: absent #options: absent, present, data_driven, propagates, assimilates
+      complexity:  
+      propagation:
+        type: 
+        size: 
+      #Leave everything below blank  UNLESS status = assimilates  
+      assimilation:
+        type: 
+        reference: 
+        complexity: 
+#        
+#DRIVERS
+#uncertainty in model drivers, covariates, and exogenous scenarios (X). 
+#Driver/covariate uncertainties may come directly from a data product, as a 
+#reported error estimate or through driver ensembles, or may be estimated based 
+#on sampling theory, cal/val documents, or some other source.
+#
+#complexity = Number of different driver variables or covariates in a model. For example, in 
+#a multiple regression this would be the number of X’s. For a climate-driven 
+#model, this would be the number of climate inputs (temperature, precip, solar 
+#radiation, etc.).
+    drivers:
+      status: absent #options: absent, present, data_driven, propagates, assimilates
+      complexity: 
+      #Leave everything below blank if status = absent, present, or data_driven
+      propagation: 
+        type: ensemble 
+        size: 
+      #Leave everything below blank  UNLESS status = assimilates  
+      assimilation:
+        type: 
+        reference: 
+        complexity: 
+#        
+#PARAMETERS
+#Uncertainty in model parameters (). For most ecological processes the parameters
+#(a.k.a. coefficients) in model equations are not physical constants but need to 
+#be estimated from data. 
+#
+#complexity = number of estimated parameters/coefficients in a model at a single point in 
+#space/time. For example, in a regression it would be the number of beta’s.
+    parameters:
+      status: absent 
+      complexity: 
+      #Leave everything below blank if status = absent, present, or data_driven
+      propagation:
+        type: 
+        size: 
+      #Leave everything below blank  UNLESS status = assimilates  
+      assimilation:
+        type: 
+        reference: 
+        complexity: 
+#
+#RANDOM EFFECTS
+#Unexplained variability and heterogeneity in model parameters (). Hierarchical 
+#models, random effect models, and meta transfer learning approaches all attempt
+#to acknowledge that the ‘best’ model parameters may change across space, time, 
+#individual, or other measurement unit.
+
+#complexity = number of random effect terms, which should be equivalent to the number of 
+#random effect variances estimated. For example, if you had a hierarchical 
+#univariate regression with a random intercept you would have two parameters 
+#(slope and intercept) and one random effect (intercept). At the moment, we are 
+#not recording the number of distinct observation units that the model was 
+#calibrated from. So, in our random intercept regression example, if this model 
+#was fit at 50 sites to be able to estimate the random intercept variance, that 
+#would affect the uncertainty about the mean and variance but that ‘50’ would 
+#not be part of the complexity dimensions.
+#
+    random_effects:
+      status: absent 
+      complexity: 
+      #Leave everything below blank if status = absent, present, or data_driven
+      propagation:
+        type: 
+        size: 
+      #Leave everything below blank  UNLESS status = assimilates  
+      assimilation:
+        type: 
+        reference:
+        complexity: 
+#
+#PROCESS ERROR
+#Dynamic uncertainty in the process model () attributable to both model 
+#misspecification and stochasticity. Pragmatically, this is the portion of the 
+#residual error from one timestep to the next that is not attributable to any of
+#the other uncertainties listed above, and which typically propagates into the future. 
+#
+#complexity =  dimension of the error covariance matrix. So if we had a n x n 
+#covariance matrix, n is the value entered for <complexity>. Typically n should 
+#match the dimensionality of the initial_conditions unless there are state 
+#variables where process error is not being estimated or propagated
+    process_error:
+      status: data_driven #options: absent, present, data_driven, propagates, assimilates
+      complexity: 2 #Leave blank if status = absent
+      #Leave everything below blank if status = absent, present, or data_driven
+      propagation:
+        type: 
+        size: 
+      #Leave everything below blank  UNLESS status = assimilates
+      assimilation:
+        type: 
+        reference: 
+        complexity:
+        covariance: 
+        localization:
+#
+#OBSERVATION ERROR
+#Uncertainty in the observations of the output variables (g). Note that many 
+#statistical modeling approaches do not formally partition errors in observations
+#from errors in the modeling process, but simply lump these into a residual error. 
+#Because of this we make the pragmatic distinction and ask that residual errors 
+#that a forecast model do not directly propagate into the future be recorded as 
+#observation errors. Observation errors now may indeed affect the initial condition 
+#uncertainty in the next forecast, but we consider this to be indirect. 
+#
+#complexity = dimension of the error covariance matrix. So if we had a n x n 
+#covariance matrix, n is the value entered for <complexity>. Typically n should 
+#match the dimensionality of the initial_conditions unless there are state 
+#variables where process error is not being estimated or propagated
+    obs_error:
+      status: absent 
+      complexity: 
+      #Leave everything below blank if status = absent, present, or data_driven
+      propagation:
+        type: 
+        size: 
+      #Leave everything below blank  UNLESS status = assimilates
+      assimilation:
+        type: 
+        reference: 
+        complexity:
+        covariance: 
+        localization:

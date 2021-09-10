@@ -23,6 +23,8 @@ publish(code = c("phenology-workflow.R", "nullModel_randomWalk_main.R", "randomW
         bucket = "forecasts",
         registries = "https://hash-archive.carlboettiger.info")
 
+source("phenology_climatology.R")
+
 message(paste0("Completed null model generation ", Sys.time()))
 
 
