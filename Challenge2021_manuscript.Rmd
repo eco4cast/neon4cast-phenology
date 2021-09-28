@@ -15,8 +15,14 @@ Intro, Methods, Discussion, etc will be developed in Google Docs
 
 ## Results
 
+```{r}
+## play with https://github.com/eco4cast/neon4cast/blob/main/notebook/multi_team_plot.R and see what's useful
+```
+
+
 ```{r,echo=FALSE}
 ## grab and load forecasts
+## update to https://data.ecoforecast.org/minio/analysis/combined_forecasts_scores.csv.gz
 filename = "phenology_combined_forecasts.csv"
 if(!file.exists(filename)){
   object <- aws.s3::get_bucket("forecasts",
@@ -30,6 +36,7 @@ if(!file.exists(filename)){
                         base_url = "ecoforecast.org")
 }
 submittedForecasts <- readr::read_csv(filename,col_names=TRUE)
+allData = readr::read_csv("phenology-targets.csv.gz")
 ```
 
 
@@ -157,6 +164,7 @@ Analysis
   Determine when specific thresholds (15%, 50%, 85%) were reached by site. Method? (logistic? Moving average?)
   For 0 to 35 days ahead of each threshold, extract what each model predicted on that date
   Calculate: CRPS, MAE, bias, [0.025, 0.5, 0.975] quantiles (for visualizing)
+    could also add "ignorance score" - log of probability you put on the data
   Visualize: Individual sites & thresholds, multiple models
     Ways of summarizing: long lead skill?, rate/degree of convergence? 
   Use linear models to assess what factors affected predictability
@@ -167,6 +175,9 @@ Analysis
 
 
 ## Figure 2: Changes in forecasted values on transition dates
+* Kathryn can work to extend to more sites and pulling out composite stats
+* David would be happy to chat off-line about scores and plots
+
 ```{r, echo=FALSE}
 ## Based on Kathryn's code in ESA2021_PresentationFigures.R
 
@@ -239,6 +250,8 @@ plotForecastedValuesOverTime(highlightTms = c(2,11))
 ```{r, echo=FALSE}
 ## Lead Time Stats
 ```
+
+Comment from Luke: Another open Q is how we will deal with variability in predictive performance across sites. Perhaps one’s fixed effects lead to great performance at site A, but very poor (e.g., strongly biased) performance at site B.
 
 
 **CRPS through time: individual sites, multiple models, specific lead times**
