@@ -24,19 +24,21 @@ Intro, Methods, Discussion, etc will be developed in Google Docs
 ## grab and load forecasts
 ## update to https://data.ecoforecast.org/minio/analysis/combined_forecasts_scores.csv.gz
 filename = "phenology_combined_forecasts.csv"
+filename = "combined_forecasts_scores.csv.gz"
 if(!file.exists(filename)){
-  object <- aws.s3::get_bucket("forecasts",
-                               prefix = paste0("not_in_standard/",filename),
+  object <- aws.s3::get_bucket("analysis", 
+                               prefix = filename,
                                region = "data",
                                base_url = "ecoforecast.org")
   aws.s3::save_object(object[[1]], 
-                        bucket = "forecasts", 
+                        bucket = "analysis", 
                         file = filename,
                         region = "data",
                         base_url = "ecoforecast.org")
 }
 submittedForecasts <- readr::read_csv(filename,col_names=TRUE)
-allData = readr::read_csv("phenology-targets.csv.gz")
+submittedForecasts <- subset(submittedForecasts,target == "gcc_90")
+#allData = readr::read_csv("phenology-targets.csv.gz")
 ```
 
 
@@ -134,25 +136,40 @@ window = 5
 targetRows = which(lubridate::yday(challengeDays) %in% ((-window:window)+targetDay))
 submitted = apply(submittedForecastsYes[targetRows,],1,sum)
 startDate = challengeDays[as.numeric(names(which.max(submitted)))]
+
 ## grab and organize forecasts
+HF = subset(submittedForecasts, siteID == site_names[s])
+submissions = tapply(HF$team,INDEX = HF$forecast_start_time,function(x){length(unique(x))})
+plot(as.Date(names(submissions)),submissions,xlab="Forecast Start Time")
+
 ts = subset(submittedForecasts, forecast_start_time == startDate & siteID == site_names[s])
+
 ts.teams = unique(ts$team)
-ylim = c(min(ts$gcc_90[ts$statistic == "lower95"]),max(ts$gcc_90[ts$statistic == "upper95"]))
-xlim = c(startDate,startDate+35)
-extract.ts = tapply(1:nrow(ts),ts$team,function(x){
-  dat = ts[x,]
-  y = dat$gcc_90[dat$statistic=="mean"]
-  yhi = dat$gcc_90[dat$statistic=="upper95"]
-  ylo = dat$gcc_90[dat$statistic=="lower95"]
-  tm = dat$time[dat$statistic=="mean"]
-  return(data.frame(tm,ylo,y,yhi))
-  })
-plot(extract.ts[[1]]$tm,extract.ts[[1]]$y,ylim=ylim,xlim=xlim,
-     xlab="date",ylab="gcc_90",type='n')
-for(i in seq_along(ts.teams)){
-  lines(extract.ts[[i]]$tm,extract.ts[[i]]$y,col=i)
-}
-  
+# ylim = c(min(ts$gcc_90[ts$statistic == "lower95"]),max(ts$gcc_90[ts$statistic == "upper95"]))
+# xlim = c(startDate,startDate+35)
+# extract.ts = tapply(1:nrow(ts),ts$team,function(x){
+#   dat = ts[x,]
+#   y = dat$gcc_90[dat$statistic=="mean"]
+#   yhi = dat$gcc_90[dat$statistic=="upper95"]
+#   ylo = dat$gcc_90[dat$statistic=="lower95"]
+#   tm = dat$time[dat$statistic=="mean"]
+#   return(data.frame(tm,ylo,y,yhi))
+#   })
+# plot(extract.ts[[1]]$tm,extract.ts[[1]]$y,ylim=ylim,xlim=xlim,
+#      xlab="date",ylab="gcc_90",type='n')
+# for(i in seq_along(ts.teams)){
+#   lines(extract.ts[[i]]$tm,extract.ts[[i]]$y,col=i)
+# }
+library(ggplot2)
+ts %>%
+ filter(time >= startDate & time <= (startDate+35)) %>%
+ ggplot() +
+  aes(x = time, y = mean, colour = team, group = team) +
+  geom_line(size = 0.5) +
+  scale_color_hue(direction = 1) +
+  labs(title="Harvard Forest") + ylab("Greeness") +
+  theme_minimal()
+
 ```
 
 **Skill vs lead time for different parts of the season [Kathryn, David, Arun]**
