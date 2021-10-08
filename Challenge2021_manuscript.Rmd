@@ -15,16 +15,94 @@ Intro, Methods, Discussion, etc will be developed in Google Docs
 
 ## Results
 
-```{r}
-## play with https://github.com/eco4cast/neon4cast/blob/main/notebook/multi_team_plot.R and see what's useful
+```{r, echo=FALSE}
+## Code from https://github.com/eco4cast/neon4cast/blob/main/notebook/multi_team_plot.R 
+## library(neon4cast)
+## source(system.file("notebook/multi_team_plot.R","neon4cast")) ## DOES NOT WORK
+library(tidyverse)
+library(tools)
+library(scales)
+
+multi_team_plot <- function(combined_forecasts, target, theme, date, horizon, siteID = NA, team = NA){
+  
+  curr_theme <- theme
+  
+  theme_forecasts <- combined_forecasts %>%
+    filter(theme == curr_theme)
+  
+  if(!is.na(siteID)){
+    siteID_subset <- siteID
+  }else{
+    siteID_subset <- unique(theme_forecasts$siteID)
+  }
+  
+  if(!is.na(team)){
+    team_subset <- team
+  }else{
+    team_subset <- unique(theme_forecasts$team)
+  }
+  
+  target_variable <- target
+  
+  combined_forecasts <- combined_forecasts %>%
+    dplyr::filter(target == target_variable,
+                  siteID %in% siteID_subset,
+                  team %in% team_subset,
+                  lubridate::as_date(forecast_start_time) %in% lubridate::as_date(date))
+  
+  combined_forecasts$max_date <- combined_forecasts$forecast_start_time + lubridate::days(horizon)
+  
+  combined_forecasts <- combined_forecasts %>%
+    dplyr::mutate(max_date = ifelse(time <= max_date, 1, 0)) %>%
+    dplyr::filter(max_date == 1)
+  
+  if(theme != "terrestrial_30min"){
+    combined_forecasts <- combined_forecasts %>%
+      mutate(time = lubridate::as_date(time),
+             forecast_start_time = lubridate::as_date(forecast_start_time))
+  }
+  
+  p <- combined_forecasts %>%
+    ggplot2::ggplot(aes(x = time, color = team)) +
+    ggplot2::geom_line(aes(y = mean)) +
+    ggplot2::geom_ribbon(aes(x = time, ymin = lower95, ymax = upper95, fill = team), alpha = 0.2) +
+    ggplot2::geom_point(aes(y = obs), color = "black", alpha = 0.4) +
+    ggplot2::labs(y = target, x = "time") +
+    ggplot2::theme_bw() +
+    ggplot2::theme(axis.text.x = element_text(angle = 90,
+                                              hjust = 0.5, vjust = 0.5))
+  
+  
+  if(class(combined_forecasts$time[1])[1] != "Date"){
+    #p <- p + ggplot2::scale_x_datetime(date_labels = scales::date_format("%Y-%m-%d"))
+  }else{
+    p <- p + ggplot2::scale_x_date(labels = scales::date_format("%Y-%m-%d"))
+    
+  }
+  
+  if(length(date) > 1  & length(siteID_subset) > 1){
+    
+    p + facet_grid(rows = vars(forecast_start_time), cols = vars(siteID))
+    
+  }else if(length(date) > 1  & length(siteID_subset) == 1){
+    
+    p + facet_wrap(vars(forecast_start_time)) + labs(title = siteID)
+    
+  }else if(length(date) == 1  & length(siteID_subset) > 1){
+    
+    p + facet_wrap(vars(siteID))
+    
+  }else{
+    p + labs(title = siteID_subset)
+  }
+}
+
 ```
 
 
 ```{r,echo=FALSE}
 ## grab and load forecasts
-## update to https://data.ecoforecast.org/minio/analysis/combined_forecasts_scores.csv.gz
-filename = "phenology_combined_forecasts.csv"
-filename = "combined_forecasts_scores.csv.gz"
+filename = "combined_forecasts_scores.csv.gz"  ## file is updated daily, but right now you need to delete this file to force the system to re-down it
 if(!file.exists(filename)){
   object <- aws.s3::get_bucket("analysis", 
                                prefix = filename,
@@ -38,7 +116,6 @@ if(!file.exists(filename)){
 }
 submittedForecasts <- readr::read_csv(filename,col_names=TRUE)
 submittedForecasts <- subset(submittedForecasts,target == "gcc_90")
-#allData = readr::read_csv("phenology-targets.csv.gz")
 ```
 
 
@@ -59,10 +136,11 @@ site_names <- c("HARV", "BART", "SCBI", "STEI", "UKFS", "GRSM", "DELA", "CLBJ")
 ```
 
 ## Figure 1: Dates of forecast and submission figure 
-```{r, echo=FALSE}
+```{r, echo=FALSE,fig.height=8}
 ## Based on Kathryn's code in ESA2021_PresentationFigures.R
-tranDates <- as.Date(allTransitions[,2],origin=as.Date("2020-12-31"))
-tranDates <- c(tranDates,as.Date(allTransitions[,6],origin=as.Date("2020-12-31")))
+## but updated for new data object
+tranDates <- as.Date(unlist(allTransitions[,2]),origin=as.Date("2020-12-31"))
+tranDates <- c(tranDates,as.Date(unlist(allTransitions[,8]),origin=as.Date("2020-12-31")))
 challengeDays <- seq(as.Date("2021-02-01"),as.Date("2021-06-30"),"day")
 
 ##jpeg(file="DatesOfForecastAndSubmissionFigure.jpg",width = 1000, height = 480, units = "px")#,height=3,width=10,units="inch",res=700)
@@ -145,21 +223,7 @@ plot(as.Date(names(submissions)),submissions,xlab="Forecast Start Time")
 ts = subset(submittedForecasts, forecast_start_time == startDate & siteID == site_names[s])
 
 ts.teams = unique(ts$team)
-# ylim = c(min(ts$gcc_90[ts$statistic == "lower95"]),max(ts$gcc_90[ts$statistic == "upper95"]))
-# xlim = c(startDate,startDate+35)
-# extract.ts = tapply(1:nrow(ts),ts$team,function(x){
-#   dat = ts[x,]
-#   y = dat$gcc_90[dat$statistic=="mean"]
-#   yhi = dat$gcc_90[dat$statistic=="upper95"]
-#   ylo = dat$gcc_90[dat$statistic=="lower95"]
-#   tm = dat$time[dat$statistic=="mean"]
-#   return(data.frame(tm,ylo,y,yhi))
-#   })
-# plot(extract.ts[[1]]$tm,extract.ts[[1]]$y,ylim=ylim,xlim=xlim,
-#      xlab="date",ylab="gcc_90",type='n')
-# for(i in seq_along(ts.teams)){
-#   lines(extract.ts[[i]]$tm,extract.ts[[i]]$y,col=i)
-# }
+
 library(ggplot2)
 ts %>%
  filter(time >= startDate & time <= (startDate+35)) %>%
@@ -169,6 +233,22 @@ ts %>%
   scale_color_hue(direction = 1) +
   labs(title="Harvard Forest") + ylab("Greeness") +
   theme_minimal()
+
+
+## version from Quinn
+targetDay = median(allTransitions$day15)
+window = 5
+targetRows = which(lubridate::yday(challengeDays) %in% ((-window:window)+targetDay))
+submitted = apply(submittedForecastsYes[targetRows,],1,sum)
+startDate = challengeDays[as.numeric(names(which.max(submitted)))]
+
+startDate = challengeDays[87]
+multi_team_plot(combined_forecasts = submittedForecasts,  ## need to update function to allow option to rescale y-axis
+                target = "gcc_90", 
+                theme = "phenology", 
+                date = startDate, 
+                horizon = 35)
+
 
 ```
 
@@ -197,6 +277,7 @@ Analysis
 
 ```{r, echo=FALSE}
 ## Based on Kathryn's code in ESA2021_PresentationFigures.R
+## updated for new data format
 
 s=1
 
@@ -210,8 +291,8 @@ plotForecastedValuesOverTime <- function(highlightTms=NA){
   finalTms <- character()
   for(t in c(2,5,8)){ #Loops over the transition dates
     cl <- 1
-    tranDate <- as.Date(allTransitions[s,t],origin=as.Date("2020-12-31"))
-    vl <- allTransitions[s,(t+1)]
+    tranDate <- as.Date(unlist(allTransitions[s,t]),origin=as.Date("2020-12-31"))
+    vl <- as.numeric(allTransitions[s,(t+1)])
     sdVal <- allTransitions[s,(t+2)]
     vl <- rescale(vl,to=c(0,1),from=c(allTransitions$minimum[s],allTransitions$maximum[s])) ##Rescales gcc values between 0 and 1
     plot(x=numeric(),y=numeric(),type="l",xlim=c(-35,0),ylim=c(0,1),ylab="",xlab="Days Before Transition Date",main=paste(site_names[s],tranDate),bty="n")
@@ -219,23 +300,13 @@ plotForecastedValuesOverTime <- function(highlightTms=NA){
     abline(h=vl,col="red",lwd=5,lty=2)
     for(tm in 1:length(tms)){
       tmSitDat <- sitDat[sitDat$team==tms[tm],] #Subset by team
-      predDat <- tmSitDat[as.Date(tmSitDat$time)==tranDate,] #Subset of the forecasts that forecasted the transition date 
-      
-      #Organizing data to put upper95, lower95, and mean on the same row 
-      organizedDat <- predDat[predDat$statistic=="mean",c("time","forecast_start_time","gcc_90")]
-      organizedDat <- organizedDat %>% rename("mean"="gcc_90")
-      lowDat <- predDat[predDat$statistic=="lower95",c("time","forecast_start_time","gcc_90")]
-      lowDat <- lowDat %>% rename("lower95"="gcc_90")
-      highDat <- predDat[predDat$statistic=="upper95",c("time","forecast_start_time","gcc_90")]
-      highDat <- highDat %>% rename("upper95"="gcc_90")
-      organizedDat <- merge(organizedDat,lowDat,by=c("time","forecast_start_time"))
-      organizedDat <- merge(organizedDat,highDat,by=c("time","forecast_start_time"))
+      organizedDat <- tmSitDat[as.Date(tmSitDat$time)==tranDate,] #Subset of the forecasts that forecasted the transition date 
       if(nrow(organizedDat)>0){
         if(t==8){
           finalTms <- c(finalTms,as.character(tms[tm]))
         }
-        sitTmMax <- max(tmSitDat$gcc_90[tmSitDat$statistic=="mean"],na.rm=TRUE)
-        rescaledDat <- rescale(organizedDat$mean,to=c(0,1),from=c(allTransitions$minimum[s],sitTmMax)) #Rescales forecasted values between 0 and 1
+        sitTmMax <- max(organizedDat$mean,na.rm=TRUE)
+        rescaledDat <- rescale(organizedDat$mean,to=c(0,1),from=c(allTransitions$minimum[s],allTransitions$maximum[s]))#sitTmMax)) #Rescales forecasted values between 0 and 1
         for(j in 1:length(rescaledDat)){ #Some values get scaled below 0 
           rescaledDat[j] <- max(rescaledDat[j],0)
         }
