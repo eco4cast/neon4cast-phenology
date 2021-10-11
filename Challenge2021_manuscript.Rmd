@@ -1,0 +1,358 @@
+---
+title: "EFI NEON Phenology forecasting challenge"
+author: "EFI NEON Phenology working group"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(scales)
+library(colorBlindness)
+library(dplyr)
+```
+
+Intro, Methods, Discussion, etc will be developed in Google Docs
+
+## Results
+
+```{r, echo=FALSE}
+## Code from https://github.com/eco4cast/neon4cast/blob/main/notebook/multi_team_plot.R 
+## library(neon4cast)
+## source(system.file("notebook/multi_team_plot.R","neon4cast")) ## DOES NOT WORK
+library(tidyverse)
+library(tools)
+library(scales)
+
+multi_team_plot <- function(combined_forecasts, target, theme, date, horizon, siteID = NA, team = NA){
+  
+  curr_theme <- theme
+  
+  theme_forecasts <- combined_forecasts %>%
+    filter(theme == curr_theme)
+  
+  if(!is.na(siteID)){
+    siteID_subset <- siteID
+  }else{
+    siteID_subset <- unique(theme_forecasts$siteID)
+  }
+  
+  if(!is.na(team)){
+    team_subset <- team
+  }else{
+    team_subset <- unique(theme_forecasts$team)
+  }
+  
+  target_variable <- target
+  
+  combined_forecasts <- combined_forecasts %>%
+    dplyr::filter(target == target_variable,
+                  siteID %in% siteID_subset,
+                  team %in% team_subset,
+                  lubridate::as_date(forecast_start_time) %in% lubridate::as_date(date))
+  
+  combined_forecasts$max_date <- combined_forecasts$forecast_start_time + lubridate::days(horizon)
+  
+  combined_forecasts <- combined_forecasts %>%
+    dplyr::mutate(max_date = ifelse(time <= max_date, 1, 0)) %>%
+    dplyr::filter(max_date == 1)
+  
+  if(theme != "terrestrial_30min"){
+    combined_forecasts <- combined_forecasts %>%
+      mutate(time = lubridate::as_date(time),
+             forecast_start_time = lubridate::as_date(forecast_start_time))
+  }
+  
+  p <- combined_forecasts %>%
+    ggplot2::ggplot(aes(x = time, color = team)) +
+    ggplot2::geom_line(aes(y = mean)) +
+    ggplot2::geom_ribbon(aes(x = time, ymin = lower95, ymax = upper95, fill = team), alpha = 0.2) +
+    ggplot2::geom_point(aes(y = obs), color = "black", alpha = 0.4) +
+    ggplot2::labs(y = target, x = "time") +
+    ggplot2::theme_bw() +
+    ggplot2::theme(axis.text.x = element_text(angle = 90,
+                                              hjust = 0.5, vjust = 0.5))
+  
+  
+  if(class(combined_forecasts$time[1])[1] != "Date"){
+    #p <- p + ggplot2::scale_x_datetime(date_labels = scales::date_format("%Y-%m-%d"))
+  }else{
+    p <- p + ggplot2::scale_x_date(labels = scales::date_format("%Y-%m-%d"))
+    
+  }
+  
+  if(length(date) > 1  & length(siteID_subset) > 1){
+    
+    p + facet_grid(rows = vars(forecast_start_time), cols = vars(siteID))
+    
+  }else if(length(date) > 1  & length(siteID_subset) == 1){
+    
+    p + facet_wrap(vars(forecast_start_time)) + labs(title = siteID)
+    
+  }else if(length(date) == 1  & length(siteID_subset) > 1){
+    
+    p + facet_wrap(vars(siteID))
+    
+  }else{
+    p + labs(title = siteID_subset)
+  }
+}
+
+```
+
+
+```{r,echo=FALSE}
+## grab and load forecasts
+filename = "combined_forecasts_scores.csv.gz"  ## file is updated daily, but right now you need to delete this file to force the system to re-down it
+if(!file.exists(filename)){
+  object <- aws.s3::get_bucket("analysis", 
+                               prefix = filename,
+                               region = "data",
+                               base_url = "ecoforecast.org")
+  aws.s3::save_object(object[[1]], 
+                        bucket = "analysis", 
+                        file = filename,
+                        region = "data",
+                        base_url = "ecoforecast.org")
+}
+submittedForecasts <- readr::read_csv(filename,col_names=TRUE)
+submittedForecasts <- subset(submittedForecasts,target == "gcc_90")
+```
+
+
+Prep:
+**Inventory grid of models by dates, count sites submitted (supplementary figure)**
+
+**ID transition dates that actually occurred at each site**
+Could organize everything into a dataframe that’s model, startdate, <existing cols>
+```{r}
+transDateFile = "allPhenologyTransitionData.csv"
+if(!file.exists(transDateFile)){
+  source("calculatePhenoCamTransitionDates.R")
+}
+allTransitions <- readr::read_csv(transDateFile,col_names = TRUE)
+s=1
+tms <- unique(submittedForecasts$team)
+site_names <- c("HARV", "BART", "SCBI", "STEI", "UKFS", "GRSM", "DELA", "CLBJ")
+```
+
+## Figure 1: Dates of forecast and submission figure 
+```{r, echo=FALSE,fig.height=8}
+## Based on Kathryn's code in ESA2021_PresentationFigures.R
+## but updated for new data object
+tranDates <- as.Date(unlist(allTransitions[,2]),origin=as.Date("2020-12-31"))
+tranDates <- c(tranDates,as.Date(unlist(allTransitions[,8]),origin=as.Date("2020-12-31")))
+challengeDays <- seq(as.Date("2021-02-01"),as.Date("2021-06-30"),"day")
+
+##jpeg(file="DatesOfForecastAndSubmissionFigure.jpg",width = 1000, height = 480, units = "px")#,height=3,width=10,units="inch",res=700)
+
+par(mfrow=c(1,2),mai=c(1,2,0.3,0.1))
+
+#for(s in 1:length(site_names)){
+submittedForecastsYes <- data.frame(matrix(ncol=length(tms),nrow=length(challengeDays)))
+for(tm in 1:length(tms)){
+  tmDat <- submittedForecasts[submittedForecasts$team==tms[tm],] #Subset by team
+  tmSitDat <- tmDat[tmDat$siteID==site_names[s],] #Subset by site
+  uniqueTimes <- unique(as.Date(tmSitDat$time))
+  for(d in 1:length(challengeDays)){
+    submittedForecastsYes[d,tm] <- challengeDays[d] %in% uniqueTimes
+  }
+}
+colnames(submittedForecastsYes) <- tms
+
+#Plot first team and then add on subsequent teams onto the graph
+tm=1
+
+plot(challengeDays[submittedForecastsYes[,tm]],rep(tm,length(challengeDays))[submittedForecastsYes[,tm]],pch=20,
+     xlab="Time",ylab="",ylim=c(0,length(tms)),bty="n",yaxt="n",main="Forecasted Days")
+axis(side = 2,at=seq(1,length(tms)),labels=tms,pos=as.Date("2021-01-20"),las=1)
+
+polygon(x=c(min(tranDates),min(tranDates),max(tranDates),max(tranDates)),y=c(-0.9,length(tms)+1,length(tms)+1,-0.9),col="chartreuse3",border=NA)
+for(tm in 1:length(tms)){
+  points(challengeDays[submittedForecastsYes[,tm]],rep(tm,length(challengeDays))[submittedForecastsYes[,tm]],pch=20)
+}
+
+#Plot dates of submissions 
+submittedForecastsYes <- data.frame(matrix(ncol=length(tms),nrow=length(challengeDays)))
+
+for(tm in 1:length(tms)){
+  tmDat <- submittedForecasts[submittedForecasts$team==tms[tm],] #Subset by team
+  tmSitDat <- tmDat[tmDat$siteID==site_names[s],] #Subset by site
+  uniqueTimes <- unique(as.Date(tmSitDat$forecast_start_time))
+  for(d in 1:length(challengeDays)){
+    submittedForecastsYes[d,tm] <- challengeDays[d] %in% uniqueTimes
+  }
+}
+colnames(submittedForecastsYes) <- tms
+
+tm=1
+par(mai=c(1,0.1,0.3,2))
+plot(challengeDays[submittedForecastsYes[,tm]],rep(tm,length(challengeDays))[submittedForecastsYes[,tm]],pch=20,
+     xlab="Time",ylab="",ylim=c(0,length(tms)),bty="n",yaxt="n",main="Submission Days",xlim=range(challengeDays))
+
+polygon(x=c(min(tranDates),min(tranDates),max(tranDates),max(tranDates)),y=c(-0.9,length(tms)+1,length(tms)+1,-0.9),col="chartreuse3",border=NA)
+for(tm in 1:length(tms)){
+  points(challengeDays[submittedForecastsYes[,tm]],rep(tm,length(challengeDays))[submittedForecastsYes[,tm]],pch=20)
+}
+#}
+##dev.off()
+```
+
+
+
+
+# Analyses
+
+**Example time series: individual sites, specific forecast dates, multiple models**
+Goal: visualization
+
+```{r, echo=FALSE}
+## Time series figures
+s=1
+targetDay = allTransitions$day15[s]
+## find the day closest to the target date that had the most forecasts submitted
+window = 5
+targetRows = which(lubridate::yday(challengeDays) %in% ((-window:window)+targetDay))
+submitted = apply(submittedForecastsYes[targetRows,],1,sum)
+startDate = challengeDays[as.numeric(names(which.max(submitted)))]
+
+## grab and organize forecasts
+HF = subset(submittedForecasts, siteID == site_names[s])
+submissions = tapply(HF$team,INDEX = HF$forecast_start_time,function(x){length(unique(x))})
+plot(as.Date(names(submissions)),submissions,xlab="Forecast Start Time")
+
+ts = subset(submittedForecasts, forecast_start_time == startDate & siteID == site_names[s])
+
+ts.teams = unique(ts$team)
+
+library(ggplot2)
+ts %>%
+ filter(time >= startDate & time <= (startDate+35)) %>%
+ ggplot() +
+  aes(x = time, y = mean, colour = team, group = team) +
+  geom_line(size = 0.5) +
+  scale_color_hue(direction = 1) +
+  labs(title="Harvard Forest") + ylab("Greeness") +
+  theme_minimal()
+
+
+## version from Quinn
+targetDay = median(allTransitions$day15)
+window = 5
+targetRows = which(lubridate::yday(challengeDays) %in% ((-window:window)+targetDay))
+submitted = apply(submittedForecastsYes[targetRows,],1,sum)
+startDate = challengeDays[as.numeric(names(which.max(submitted)))]
+
+startDate = challengeDays[87]
+multi_team_plot(combined_forecasts = submittedForecasts,  ## need to update function to allow option to rescale y-axis
+                target = "gcc_90", 
+                theme = "phenology", 
+                date = startDate, 
+                horizon = 35)
+
+
+```
+
+**Skill vs lead time for different parts of the season [Kathryn, David, Arun]**
+Goal: using key date thresholds as examples, determine predictability
+  Does this vary by threshold? (e.g. is it easier to predict 50% expansion than 15%)
+  Does this vary by type of model, complexity, driver, and type uncertainties considered?
+  What does this tell us about overall predictability and what forecasting approaches are most promising
+Analysis
+  Determine when specific thresholds (15%, 50%, 85%) were reached by site. Method? (logistic? Moving average?)
+  For 0 to 35 days ahead of each threshold, extract what each model predicted on that date
+  Calculate: CRPS, MAE, bias, [0.025, 0.5, 0.975] quantiles (for visualizing)
+    could also add "ignorance score" - log of probability you put on the data
+  Visualize: Individual sites & thresholds, multiple models
+    Ways of summarizing: long lead skill?, rate/degree of convergence? 
+  Use linear models to assess what factors affected predictability
+    like which factors? - model complexity, training data, sources of uncertainty, forecast horizon, site?, adjacent training data
+```{r, echo=FALSE}
+## Lead Time Figures
+```
+
+
+## Figure 2: Changes in forecasted values on transition dates
+* Kathryn can work to extend to more sites and pulling out composite stats
+* David would be happy to chat off-line about scores and plots
+
+```{r, echo=FALSE}
+## Based on Kathryn's code in ESA2021_PresentationFigures.R
+## updated for new data format
+
+s=1
+
+sitDat <- submittedForecasts[submittedForecasts$siteID==site_names[s],] #Subset by site
+cls <- c("#004949","#000000",paletteMartin[3:15])
+
+##pdf(file="ForecastedValuesOnTransitionDates_presentationFigures.pdf",height=5,width=12)
+par(mfrow=c(1,4),mai=c(0.5,0.5,1,0.1))
+
+plotForecastedValuesOverTime <- function(highlightTms=NA){
+  finalTms <- character()
+  for(t in c(2,5,8)){ #Loops over the transition dates
+    cl <- 1
+    tranDate <- as.Date(unlist(allTransitions[s,t]),origin=as.Date("2020-12-31"))
+    vl <- as.numeric(allTransitions[s,(t+1)])
+    sdVal <- allTransitions[s,(t+2)]
+    vl <- rescale(vl,to=c(0,1),from=c(allTransitions$minimum[s],allTransitions$maximum[s])) ##Rescales gcc values between 0 and 1
+    plot(x=numeric(),y=numeric(),type="l",xlim=c(-35,0),ylim=c(0,1),ylab="",xlab="Days Before Transition Date",main=paste(site_names[s],tranDate),bty="n")
+    
+    abline(h=vl,col="red",lwd=5,lty=2)
+    for(tm in 1:length(tms)){
+      tmSitDat <- sitDat[sitDat$team==tms[tm],] #Subset by team
+      organizedDat <- tmSitDat[as.Date(tmSitDat$time)==tranDate,] #Subset of the forecasts that forecasted the transition date 
+      if(nrow(organizedDat)>0){
+        if(t==8){
+          finalTms <- c(finalTms,as.character(tms[tm]))
+        }
+        sitTmMax <- max(organizedDat$mean,na.rm=TRUE)
+        rescaledDat <- rescale(organizedDat$mean,to=c(0,1),from=c(allTransitions$minimum[s],allTransitions$maximum[s]))#sitTmMax)) #Rescales forecasted values between 0 and 1
+        for(j in 1:length(rescaledDat)){ #Some values get scaled below 0 
+          rescaledDat[j] <- max(rescaledDat[j],0)
+        }
+        if(is.na(highlightTms) || tm%in%highlightTms){ #No transparency if you do not want to highlight teams 
+                                                       #or if the team is within the highlighted teams
+          tF <- 1
+          lwdVl <- 3
+        }else{
+          tF <- 0.2
+          lwdVl <- 1
+        }
+        lines(as.Date(organizedDat$forecast_start_time)-tranDate,rescaledDat,col=scales::alpha(cls[cl],tF),lwd=lwdVl)
+        cl <- cl + 1
+      }
+    }
+  } 
+  plot(x=numeric(),y=numeric(),type="l",xlim=c(-35,0),ylim=c(0,1),ylab="",xlab="",main="Legend",bty="n")
+  legend("topleft",c("True Value",as.character(finalTms)),col=c("red",cls[1:length(finalTms)]),lty=c(2,rep(1,length(finalTms))),lwd=c(2,rep(3,length(finalTms))),bty = "n")
+}
+plotForecastedValuesOverTime()
+plotForecastedValuesOverTime(highlightTms = 12)
+plotForecastedValuesOverTime(highlightTms = 1)
+plotForecastedValuesOverTime(highlightTms = 13)
+plotForecastedValuesOverTime(highlightTms = c(2,11))
+##dev.off()
+
+```
+
+```{r, echo=FALSE}
+## Lead Time Stats
+```
+
+Comment from Luke: Another open Q is how we will deal with variability in predictive performance across sites. Perhaps one’s fixed effects lead to great performance at site A, but very poor (e.g., strongly biased) performance at site B.
+
+
+**CRPS through time: individual sites, multiple models, specific lead times**
+Goal: Generalize what we learned from previous analysis continuously
+Use the results from previous analysis to propose some specific lead times that are interesting to look at (e.g. 1, 2, 3 week)
+Models may have consistent biases (high/low, early/late); might catch general shape but be over/underpredicting gcc
+```{r,echo=FALSE}
+## CRPS figures
+```
+
+
+**Additional analyses???**
+Reminder: there will be future rounds & future papers (more sites, more years)
+Table with aggregate scores - but have to be careful to count for when there are just forecasts for the easy times or for forecasts submitted every 5 days vs those submitted every day
+
+
