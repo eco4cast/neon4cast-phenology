@@ -268,6 +268,60 @@ Analysis
     like which factors? - model complexity, training data, sources of uncertainty, forecast horizon, site?, adjacent training data
 ```{r, echo=FALSE}
 ## Lead Time Figures
+plotStatisticsOverTime <- function(highlightTms=NA,statistic,ylim=c(0,1)){
+  par(mfrow=c(1,4),mai=c(0.5,0.5,1,0.1))
+
+  finalTms <- character()
+  for(t in c(2,5,8)){ #Loops over the transition dates
+    cl <- 1
+    tranDate <- as.Date(unlist(allTransitions[s,t]),origin=as.Date("2020-12-31"))
+    vl <- as.numeric(allTransitions[s,(t+1)])
+    sdVal <- allTransitions[s,(t+2)]
+
+    plot(x=numeric(),y=numeric(),type="l",xlim=c(-35,0),ylim=ylim,ylab=statistic,xlab="Days Before Transition Date",main=paste(site_names[s],tranDate),bty="n")
+
+    for(tm in 1:length(tms)){
+      tmSitDat <- sitDat[sitDat$team==tms[tm],] #Subset by team
+      organizedDat <- tmSitDat[as.Date(tmSitDat$time)==tranDate,] #Subset of the forecasts that forecasted the transition date 
+      if(nrow(organizedDat)>0){
+        if(t==8){
+          finalTms <- c(finalTms,as.character(tms[tm]))
+        }
+        sitTmMax <- max(organizedDat$mean,na.rm=TRUE)
+
+        if(is.na(highlightTms) || tm%in%highlightTms){ #No transparency if you do not want to highlight teams
+                                                       #or if the team is within the highlighted teams
+          tF <- 1
+          lwdVl <- 3
+        }else{
+          tF <- 0.2
+          lwdVl <- 1
+        }
+        if(statistic=="bias"){
+          computedStat <- vl-organizedDat$mean
+        }else if(statistic=="CRPS"){
+          computedStat <- organizedDat$crps
+        }else if(statistic=="MAE"){ #tbh, I'm not sure if this is how we want to calculate MAE
+          computedStat <- numeric()
+          for(r in 1:nrow(organizedDat)){
+            computedStat <- c(computedStat,
+                              sum(abs(rnorm(10000,organizedDat$mean[r],organizedDat$sd[r])-vl))/10000) #Assumes normal distribution
+          }
+        }
+        
+        lines(as.Date(organizedDat$forecast_start_time)-tranDate,computedStat,col=scales::alpha(cls[cl],tF),lwd=lwdVl)
+        cl <- cl + 1
+      }
+    }
+  } 
+  plot(x=numeric(),y=numeric(),type="l",xlim=c(-35,0),ylim=c(0,1),ylab="",xlab="",main="Legend",bty="n")
+  legend("topleft",as.character(finalTms),col=cls[1:length(finalTms)],lty=rep(1,length(finalTms)),lwd=rep(3,length(finalTms)),bty = "n")
+}
+plotStatisticsOverTime(highlightTms=NA,statistic="bias",ylim=c(-0.1,0.15))
+plotStatisticsOverTime(highlightTms=NA,statistic="CRPS",ylim=c(0,0.15))
+plotStatisticsOverTime(highlightTms=NA,statistic="MAE",ylim=c(0,0.15))
+
+
 ```
 
 
