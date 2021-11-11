@@ -22,6 +22,7 @@ Intro, Methods, Discussion, etc will be developed in Google Docs
 library(tidyverse)
 library(tools)
 library(scales)
+library(mgcv)
 
 multi_team_plot <- function(combined_forecasts, target, theme, date, horizon, siteID = NA, team = NA){
   
@@ -270,7 +271,8 @@ Analysis
 ## Lead Time Figures
 plotStatisticsOverTime <- function(highlightTms=NA,statistic,ylim=c(0,1),s){
   par(mfrow=c(1,4),mai=c(0.5,0.5,1,0.1))
-
+  sitDat <- submittedForecasts[submittedForecasts$siteID==site_names[s],]
+  
   finalTms <- character()
   for(t in c(2,5,8)){ #Loops over the transition dates
     cl <- 1
@@ -319,7 +321,7 @@ plotStatisticsOverTime <- function(highlightTms=NA,statistic,ylim=c(0,1),s){
 }
 plotStatisticsOverTime(highlightTms=NA,statistic="bias",ylim=c(-0.1,0.15),s=1) #s indicates the site number
 plotStatisticsOverTime(highlightTms=NA,statistic="CRPS",ylim=c(0,0.15),s=1)
-plotStatisticsOverTime(highlightTms=NA,statistic="MAE",ylim=c(0,0.15),s=1)
+#plotStatisticsOverTime(highlightTms=NA,statistic="MAE",ylim=c(0,0.15),s=1)
 
 
 ```
@@ -391,6 +393,27 @@ plotForecastedValuesOverTime(highlightTms = c(2,11),s=1)
 
 ```{r, echo=FALSE}
 ## Lead Time Stats
+sf <- submittedForecasts %>% filter(forecast_start_time > "2021-01-01" & forecast_start_time < "2021-06-30")
+
+matchSite <- match(sf$siteID,allTransitions$siteID)
+phenoDate <- lubridate::yday(sf$forecast_start_time) - allTransitions$day50[matchSite]
+
+fit <- lm(crps ~ siteID + horizon + team + phenoDate,data = sf)
+summary(fit)
+
+fit2 <- gam(crps ~ siteID + s(horizon) + team + s(phenoDate),data = sf,method="REML")
+summary(fit2)
+
+hnew <- 1:35
+crps_horiz <- predict(fit2,data.frame(horizon=hnew,siteID="HARV",team="EFInull",phenoDate=0))
+plot(hnew,crps_horiz,xlab="Horizon",ylab="predicted CRPS")
+
+pDnew <- -80:40
+crps_pD <- predict(fit2,data.frame(horizon=1,siteID="HARV",team="EFInull",phenoDate=pDnew))
+plot(pDnew,crps_pD,xlab="Days from 50%",ylab="predicted CRPS")
+
+
+
 ```
 
 Comment from Luke: Another open Q is how we will deal with variability in predictive performance across sites. Perhaps one’s fixed effects lead to great performance at site A, but very poor (e.g., strongly biased) performance at site B.
