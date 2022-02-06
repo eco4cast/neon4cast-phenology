@@ -55,12 +55,16 @@ allData <- left_join(combined, allData, by = c("time", "siteID"))
 
 readr::write_csv(allData, "phenology-targets.csv.gz")
 
+aws.s3::put_object(file = "phenology-targets.csv.gz", 
+                   object = "phenology/phenology-targets.csv.gz",
+                   bucket = "targets")
+
 ## Publish the targets to EFI.  Assumes aws.s3 env vars are configured.
-source("../neon4cast-shared-utilities/publish.R")
-publish(code = c("phenology-workflow.R", "downloadPhenoCam.R"),
-        data_out = c("phenology-targets.csv.gz"),
-        prefix = "phenology/",
-        bucket = "targets",
-        registries = "https://hash-archive.carlboettiger.info")
+#source("../neon4cast-shared-utilities/publish.R")
+#publish(code = c("phenology-workflow.R", "downloadPhenoCam.R"),
+#        data_out = c("phenology-targets.csv.gz"),
+#      prefix = "phenology/",
+#        bucket = "targets",
+#        registries = "https://hash-archive.carlboettiger.info")
 
 unlink("phenology-targets.csv.gz")

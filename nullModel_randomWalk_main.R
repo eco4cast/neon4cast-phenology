@@ -239,7 +239,7 @@ ncatt_put(ncout,0,"forecast_iteration_id",as.character(forecast_iteration_id),
 nc_close(ncout)   ## make sure to close the file
 
 neon4cast::submit(forecast_file = forecast_file_name, 
-                  metadata = NA, 
+                  metadata = NULL, 
                   ask = FALSE)
 
 unlink(forecast_file_name)
