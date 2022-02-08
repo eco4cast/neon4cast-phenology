@@ -55,7 +55,7 @@ gcc_90 <- forecast %>%
   rename(mean = gcc_clim,
          sd = gcc_sd) %>% 
   group_by(siteID) %>% 
-  mutate(mean = imputeTS::na_interpolation(mean, rule = 2, maxgap = 3),
+  mutate(mean = imputeTS::na_interpolation(mean, maxgap = 3),
          sd = median(sd, na.rm = TRUE)) %>%
   pivot_longer(c("mean", "sd"),names_to = "statistic", values_to = "gcc_90")
 
@@ -64,7 +64,7 @@ rcc_90 <- forecast %>%
   rename(mean =rcc_clim,
          sd = rcc_sd) %>% 
   group_by(siteID) %>% 
-  mutate(mean = imputeTS::na_interpolation(mean, rule = 2, maxgap = 3),
+  mutate(mean = imputeTS::na_interpolation(mean, maxgap = 3),
          sd = median(sd, na.rm = TRUE)) %>%
   pivot_longer(c("mean", "sd"),names_to = "statistic", values_to = "rcc_90")
 
