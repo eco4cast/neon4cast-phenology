@@ -9,8 +9,6 @@ download_url <- paste0("https://data.ecoforecast.org/targets/",
 target <- read_csv(download_url)
 sites <- read_csv("Phenology_NEON_Field_Site_Metadata_20210928.csv")
 
-
-
 target_clim <- target %>%  
   mutate(doy = yday(time)) %>% 
   group_by(doy, siteID) %>% 
@@ -31,7 +29,7 @@ if(curr_month < 10){
 curr_year <- year(Sys.Date())
 start_date <- Sys.Date() + days(1)
 
-forecast_dates <- seq(start_date, as_date(start_date + days(35)), "1 day")
+forecast_dates <- seq(start_date, as_date(start_date + days(34)), "1 day")
 forecast_doy <- yday(forecast_dates)
 
 forecast <- target_clim %>%
