@@ -11,7 +11,7 @@ library(colorBlindness)
 library(dplyr)
 ```
 
-Intro, Methods, Discussion, etc will be developed in Google Docs
+Intro, Methods, Discussion, etc will be developed in [Google Docs](https://docs.google.com/document/d/1LvdfX1qk6AJIgRetZRl9qLUt-1kTlWJv4ftUMm2NJzQ/edit?usp=sharing)
 
 ## Results
 
@@ -115,29 +115,77 @@ if(!file.exists(filename)){
                         region = "data",
                         base_url = "ecoforecast.org")
 }
-submittedForecasts <- readr::read_csv(filename,col_names=TRUE)
-submittedForecasts <- subset(submittedForecasts,target == "gcc_90")
-```
+submittedForecasts <- readr::read_csv(filename, col_names = TRUE)
+gccForecasts <- subset(submittedForecasts, target == "gcc_90")
 
+teams <- unique(gccForecasts$team)
+n_teams <- length(teams)
+
+site_names <- c("HARV", "BART", "SCBI", "STEI", "UKFS", "GRSM", "DELA", "CLBJ")
+```
+### Exploratory Data Analysis
+
+```{r}
+
+ggplot(data = gccForecasts) + 
+  geom_histogram(aes(horizon, fill = team), bins = 100) + 
+  geom_vline(xintercept = c(1, 35))# +
+  ## conclusion: filter 1 < horizon < 35   start by truncating to only 
+  ## xlim(c(0, 30))
+
+ggplot(data = gccForecasts) + 
+  geom_histogram(aes(forecast_start_time, fill = team), bins = 100) +
+  xlim(lubridate::ymd(c('2021-01-01', '2021-07-01')))
+
+summary(gccForecasts)
+
+gcc_forecast_subset <- gccForecasts %>% 
+  dplyr::filter(!is.na(mean) & 
+                  horizon >= 1 & horizon <= 35 &
+                  forecast_start_time >= lubridate::ymd("2021-02-01") & 
+                  forecast_start_time <= lubridate::ymd("2021-06-01"))
+
+gcc_forecast_subset %>%
+  dplyr::group_by(team) %>% 
+  summarize(n = n()) %>% 
+  dplyr::arrange(n) %>% 
+  ggplot() + geom_point(aes(team, n)) + coord_flip() + theme_bw() + scale_y_log10()
+
+gcc_forecast_subset %>%
+  group_by(forecast_start_time) %>% 
+  summarize(n = n()) %>% 
+  dplyr::arrange(n) %>% 
+  ggplot() + geom_point(aes(forecast_start_time, n)) + theme_bw()
+```
 
 Prep:
 **Inventory grid of models by dates, count sites submitted (supplementary figure)**
 
 **ID transition dates that actually occurred at each site**
 Could organize everything into a dataframe that’s model, startdate, <existing cols>
+
+Cite Richardson et al; phenopix package
+
+  Gianluca Filippa, Edoardo Cremonese, Mirco Migliavacca, Marta Galvagno,
+  Matthias Folker, Andrew D. Richardson and Enrico Tomelleri (2020).
+  phenopix: Process Digital Images of a Vegetation Cover. R package
+  version 2.4.2. https://CRAN.R-project.org/package=phenopix
+
+**TODO** use gcc_forecast_subset in the calculatePhenoCamTransitionDates.R
+
 ```{r}
-transDateFile = "allPhenologyTransitionData.csv"
+transDateFile <- "allPhenologyTransitionData.csv"
 if(!file.exists(transDateFile)){
   source("calculatePhenoCamTransitionDates.R")
 }
-allTransitions <- readr::read_csv(transDateFile,col_names = TRUE)
-s=1
-tms <- unique(submittedForecasts$team)
-site_names <- c("HARV", "BART", "SCBI", "STEI", "UKFS", "GRSM", "DELA", "CLBJ")
+allTransitions <- readr::read_csv(transDateFile, col_names = TRUE)
+s <- 1
+
 ```
 
-## Figure 1: Dates of forecast and submission figure 
-```{r, echo=FALSE,fig.height=8}
+## Figure 1: Dates of forecast and submission figure
+
+```{r, echo=FALSE,fig.height=8, fig.width=6}
 ## Based on Kathryn's code in ESA2021_PresentationFigures.R
 ## but updated for new data object
 tranDates <- as.Date(unlist(allTransitions[,2]),origin=as.Date("2020-12-31"))
@@ -149,50 +197,50 @@ challengeDays <- seq(as.Date("2021-02-01"),as.Date("2021-06-30"),"day")
 par(mfrow=c(1,2),mai=c(1,2,0.3,0.1))
 
 #for(s in 1:length(site_names)){
-submittedForecastsYes <- data.frame(matrix(ncol=length(tms),nrow=length(challengeDays)))
-for(tm in 1:length(tms)){
-  tmDat <- submittedForecasts[submittedForecasts$team==tms[tm],] #Subset by team
+gccForecastsYes <- data.frame(matrix(ncol=n_teams,nrow=length(challengeDays)))
+for(tm in 1:n_teams){
+  tmDat <- gccForecasts[gccForecasts$team==teams[tm],] #Subset by team
   tmSitDat <- tmDat[tmDat$siteID==site_names[s],] #Subset by site
   uniqueTimes <- unique(as.Date(tmSitDat$time))
   for(d in 1:length(challengeDays)){
-    submittedForecastsYes[d,tm] <- challengeDays[d] %in% uniqueTimes
+    gccForecastsYes[d,tm] <- challengeDays[d] %in% uniqueTimes
   }
 }
-colnames(submittedForecastsYes) <- tms
+colnames(gccForecastsYes) <- teams
 
 #Plot first team and then add on subsequent teams onto the graph
-tm=1
+tm <- 1
 
-plot(challengeDays[submittedForecastsYes[,tm]],rep(tm,length(challengeDays))[submittedForecastsYes[,tm]],pch=20,
-     xlab="Time",ylab="",ylim=c(0,length(tms)),bty="n",yaxt="n",main="Forecasted Days")
-axis(side = 2,at=seq(1,length(tms)),labels=tms,pos=as.Date("2021-01-20"),las=1)
+plot(challengeDays[gccForecastsYes[,tm]],rep(tm,length(challengeDays))[gccForecastsYes[,tm]],pch=20,
+     xlab="Time",ylab="",ylim=c(0,n_teams),bty="n",yaxt="n",main="Forecasted Days")
+axis(side = 2,at=seq(1,n_teams),labels=teams,pos=as.Date("2021-01-20"),las=1)
 
-polygon(x=c(min(tranDates),min(tranDates),max(tranDates),max(tranDates)),y=c(-0.9,length(tms)+1,length(tms)+1,-0.9),col="chartreuse3",border=NA)
-for(tm in 1:length(tms)){
-  points(challengeDays[submittedForecastsYes[,tm]],rep(tm,length(challengeDays))[submittedForecastsYes[,tm]],pch=20)
+polygon(x=c(min(tranDates),min(tranDates),max(tranDates),max(tranDates)),y=c(-0.9,n_teams+1,n_teams+1,-0.9),col="chartreuse3",border=NA)
+for(tm in 1:n_teams){
+  points(challengeDays[gccForecastsYes[,tm]],rep(tm,length(challengeDays))[gccForecastsYes[,tm]],pch=20)
 }
 
 #Plot dates of submissions 
-submittedForecastsYes <- data.frame(matrix(ncol=length(tms),nrow=length(challengeDays)))
+gccForecastsYes <- data.frame(matrix(ncol=n_teams,nrow=length(challengeDays)))
 
-for(tm in 1:length(tms)){
-  tmDat <- submittedForecasts[submittedForecasts$team==tms[tm],] #Subset by team
+for(tm in 1:n_teams){
+  tmDat <- gccForecasts[gccForecasts$team==teams[tm],] #Subset by team
   tmSitDat <- tmDat[tmDat$siteID==site_names[s],] #Subset by site
   uniqueTimes <- unique(as.Date(tmSitDat$forecast_start_time))
   for(d in 1:length(challengeDays)){
-    submittedForecastsYes[d,tm] <- challengeDays[d] %in% uniqueTimes
+    gccForecastsYes[d,tm] <- challengeDays[d] %in% uniqueTimes
   }
 }
-colnames(submittedForecastsYes) <- tms
+colnames(gccForecastsYes) <- teams
 
-tm=1
+tm <- 1
 par(mai=c(1,0.1,0.3,2))
-plot(challengeDays[submittedForecastsYes[,tm]],rep(tm,length(challengeDays))[submittedForecastsYes[,tm]],pch=20,
-     xlab="Time",ylab="",ylim=c(0,length(tms)),bty="n",yaxt="n",main="Submission Days",xlim=range(challengeDays))
+plot(challengeDays[gccForecastsYes[,tm]],rep(tm,length(challengeDays))[gccForecastsYes[,tm]],pch=20,
+     xlab="Time",ylab="",ylim=c(0,n_teams),bty="n",yaxt="n",main="Submission Days",xlim=range(challengeDays))
 
-polygon(x=c(min(tranDates),min(tranDates),max(tranDates),max(tranDates)),y=c(-0.9,length(tms)+1,length(tms)+1,-0.9),col="chartreuse3",border=NA)
-for(tm in 1:length(tms)){
-  points(challengeDays[submittedForecastsYes[,tm]],rep(tm,length(challengeDays))[submittedForecastsYes[,tm]],pch=20)
+polygon(x=c(min(tranDates),min(tranDates),max(tranDates),max(tranDates)),y=c(-0.9,n_teams+1,n_teams+1,-0.9),col="chartreuse3",border=NA)
+for(tm in 1:n_teams){
+  points(challengeDays[gccForecastsYes[,tm]],rep(tm,length(challengeDays))[gccForecastsYes[,tm]],pch=20)
 }
 #}
 ##dev.off()
@@ -208,22 +256,22 @@ Goal: visualization
 
 ```{r, echo=FALSE}
 ## Time series figures
-s=1
-targetDay = allTransitions$day15[s]
+s <- 1
+targetDay <- allTransitions$day15[s]
 ## find the day closest to the target date that had the most forecasts submitted
 window = 5
-targetRows = which(lubridate::yday(challengeDays) %in% ((-window:window)+targetDay))
-submitted = apply(submittedForecastsYes[targetRows,],1,sum)
-startDate = challengeDays[as.numeric(names(which.max(submitted)))]
+targetRows <- which(lubridate::yday(challengeDays) %in% ((-window:window)+targetDay))
+submitted <- apply(gccForecastsYes[targetRows,],1,sum)
+startDate <- challengeDays[as.numeric(names(which.max(submitted)))]
 
 ## grab and organize forecasts
-HF = subset(submittedForecasts, siteID == site_names[s])
-submissions = tapply(HF$team,INDEX = HF$forecast_start_time,function(x){length(unique(x))})
+HF <- subset(gccForecasts, siteID == site_names[s])
+submissions <- tapply(HF$team,INDEX = HF$forecast_start_time,function(x){length(unique(x))})
 plot(as.Date(names(submissions)),submissions,xlab="Forecast Start Time")
 
-ts = subset(submittedForecasts, forecast_start_time == startDate & siteID == site_names[s])
+ts <- subset(gccForecasts, forecast_start_time == startDate & siteID == site_names[s])
 
-ts.teams = unique(ts$team)
+ts.teams <- unique(ts$team)
 
 library(ggplot2)
 ts %>%
@@ -237,14 +285,14 @@ ts %>%
 
 
 ## version from Quinn
-targetDay = median(allTransitions$day15)
-window = 5
-targetRows = which(lubridate::yday(challengeDays) %in% ((-window:window)+targetDay))
-submitted = apply(submittedForecastsYes[targetRows,],1,sum)
-startDate = challengeDays[as.numeric(names(which.max(submitted)))]
+targetDay <- median(allTransitions$day15)
+window <- 5
+targetRows <- which(lubridate::yday(challengeDays) %in% ((-window:window)+targetDay))
+submitted <- apply(gccForecastsYes[targetRows,],1,sum)
+startDate <- challengeDays[as.numeric(names(which.max(submitted)))]
 
-startDate = challengeDays[87]
-multi_team_plot(combined_forecasts = submittedForecasts,  ## need to update function to allow option to rescale y-axis
+startDate <- challengeDays[87]
+multi_team_plot(combined_forecasts = gccForecasts,  ## need to update function to allow option to rescale y-axis
                 target = "gcc_90", 
                 theme = "phenology", 
                 date = startDate, 
@@ -254,27 +302,45 @@ multi_team_plot(combined_forecasts = submittedForecasts,  ## need to update func
 ```
 
 **Skill vs lead time for different parts of the season [Kathryn, David, Arun]**
+
 Goal: using key date thresholds as examples, determine predictability
-  Does this vary by threshold? (e.g. is it easier to predict 50% expansion than 15%)
-  Does this vary by type of model, complexity, driver, and type uncertainties considered?
-  What does this tell us about overall predictability and what forecasting approaches are most promising
+
+- define predictability: crps value
+
+Questions
+* Does this vary by threshold? hypothesis: it is easier to predict 50% expansion than 15% because there are more observations of non-dormant days that can be used in the prediction.  
+  * test crps: if easier to predict 50% expansion than 15% expansion, would expect lower crps score for predicting 50% expansion
+* Does this vary by type of model, complexity, driver, and type uncertainties considered?
+   * currently we don't have this curated, may or may not be available
+   * could review metadata and / or send a survey to teams
+   * or could group models by 'type' to avoid underspecified model
+* What does this tell us about overall predictability and what forecasting approaches are most promising
+
+
 Analysis
-  Determine when specific thresholds (15%, 50%, 85%) were reached by site. Method? (logistic? Moving average?)
-  For 0 to 35 days ahead of each threshold, extract what each model predicted on that date
-  Calculate: CRPS, MAE, bias, [0.025, 0.5, 0.975] quantiles (for visualizing)
-    could also add "ignorance score" - log of probability you put on the data
-  Visualize: Individual sites & thresholds, multiple models
-    Ways of summarizing: long lead skill?, rate/degree of convergence? 
-  Use linear models to assess what factors affected predictability
-    like which factors? - model complexity, training data, sources of uncertainty, forecast horizon, site?, adjacent training data
+* Determine when specific thresholds (15%, 50%, 85%) were reached by site. Method? (logistic? Moving average?)
+  * phenopix::ElmoreFit 
+* For 0 to 35 days ahead of each threshold, extract what each model predicted on that date
+* Calculate: CRPS, MAE, bias, [0.025, 0.5, 0.975] quantiles (for visualizing)
+  * could also add "ignorance score" - log of probability you put on the data
+* Visualize: Individual sites & thresholds, multiple models
+  * Ways of summarizing: long lead skill?, rate/degree of convergence? 
+  * Use linear models to assess what factors affected predictability
+  * like which factors? - model complexity, training data, sources of uncertainty, forecast horizon, site?, adjacent training data
+
 ```{r, echo=FALSE}
 ## Lead Time Figures
+##   Lead Time = "days before trasition date"
+## Plots 
+##  - lead time vs bias
+##  - lead time vs CRPS 
 
 cls <- c("#004949","#000000",paletteMartin[3:15])
 
-plotStatisticsOverTime <- function(highlightTms=NA,statistic,ylim=c(0,1),s){
+## For clarity could 1) add gccForecasts as argument to this function and 2) replace argument `s` with `site_name = "HARV"`
+plotStatisticsOverTime <- function(highlightTms = NA, statistic, ylim = c(0, 1), s){
   par(mfrow=c(1,4),mai=c(0.5,0.5,1,0.1))
-  sitDat <- submittedForecasts[submittedForecasts$siteID==site_names[s],]
+  sitDat <- gccForecasts[gccForecasts$siteID == site_names[s], ]
   
   finalTms <- character()
   for(t in c(2,5,8)){ #Loops over the transition dates
@@ -285,12 +351,12 @@ plotStatisticsOverTime <- function(highlightTms=NA,statistic,ylim=c(0,1),s){
 
     plot(x=numeric(),y=numeric(),type="l",xlim=c(-35,0),ylim=ylim,ylab=statistic,xlab="Days Before Transition Date",main=paste(site_names[s],tranDate),bty="n")
 
-    for(tm in 1:length(tms)){
-      tmSitDat <- sitDat[sitDat$team==tms[tm],] #Subset by team
+    for(tm in 1:n_teams){
+      tmSitDat <- sitDat[sitDat$team==teams[tm],] #Subset by team
       organizedDat <- tmSitDat[as.Date(tmSitDat$time)==tranDate,] #Subset of the forecasts that forecasted the transition date 
       if(nrow(organizedDat)>0){
         if(t==8){
-          finalTms <- c(finalTms,as.character(tms[tm]))
+          finalTms <- c(finalTms,as.character(teams[tm]))
         }
         sitTmMax <- max(organizedDat$mean,na.rm=TRUE)
 
@@ -331,6 +397,7 @@ plotStatisticsOverTime(highlightTms=NA,statistic="CRPS",ylim=c(0,0.15),s=1)
 
 
 ## Figure 2: Changes in forecasted values on transition dates
+
 * Kathryn can work to extend to more sites and pulling out composite stats
 * David would be happy to chat off-line about scores and plots
 
@@ -340,7 +407,7 @@ plotStatisticsOverTime(highlightTms=NA,statistic="CRPS",ylim=c(0,0.15),s=1)
 
 s=1
 
-sitDat <- submittedForecasts[submittedForecasts$siteID==site_names[s],] #Subset by site
+sitDat <- gccForecasts[gccForecasts$siteID==site_names[s],] #Subset by site
 cls <- c("#004949","#000000",paletteMartin[3:15])
 
 ##pdf(file="ForecastedValuesOnTransitionDates_presentationFigures.pdf",height=5,width=12)
@@ -357,12 +424,12 @@ plotForecastedValuesOverTime <- function(highlightTms=NA,s){
     plot(x=numeric(),y=numeric(),type="l",xlim=c(-35,0),ylim=c(0,1),ylab="",xlab="Days Before Transition Date",main=paste(site_names[s],tranDate),bty="n")
     
     abline(h=vl,col="red",lwd=5,lty=2)
-    for(tm in 1:length(tms)){
-      tmSitDat <- sitDat[sitDat$team==tms[tm],] #Subset by team
+    for(tm in 1:n_teams){
+      tmSitDat <- sitDat[sitDat$team==teams[tm],] #Subset by team
       organizedDat <- tmSitDat[as.Date(tmSitDat$time)==tranDate,] #Subset of the forecasts that forecasted the transition date 
       if(nrow(organizedDat)>0){
         if(t==8){
-          finalTms <- c(finalTms,as.character(tms[tm]))
+          finalTms <- c(finalTms,as.character(teams[tm]))
         }
         sitTmMax <- max(organizedDat$mean,na.rm=TRUE)
         rescaledDat <- rescale(organizedDat$mean,to=c(0,1),from=c(allTransitions$minimum[s],allTransitions$maximum[s]))#sitTmMax)) #Rescales forecasted values between 0 and 1
@@ -386,25 +453,30 @@ plotForecastedValuesOverTime <- function(highlightTms=NA,s){
   legend("topleft",c("True Value",as.character(finalTms)),col=c("red",cls[1:length(finalTms)]),lty=c(2,rep(1,length(finalTms))),lwd=c(2,rep(3,length(finalTms))),bty = "n")
 }
 plotForecastedValuesOverTime(s=1)#s indicates the site number
-plotForecastedValuesOverTime(highlightTms = 12,s=1)
-plotForecastedValuesOverTime(highlightTms = 1,s=1)
-plotForecastedValuesOverTime(highlightTms = 13,s=1)
-plotForecastedValuesOverTime(highlightTms = c(2,11),s=1)
+plotForecastedValuesOverTime(highlightTms = 12, s = 1)
+plotForecastedValuesOverTime(highlightTms = 1, s = 1)
+plotForecastedValuesOverTime(highlightTms = 13, s = 1)
+plotForecastedValuesOverTime(highlightTms = c(2, 11), s = 1)
 ##dev.off()
 
 ```
 
 ```{r, echo=FALSE}
 ## Lead Time Stats
-sf <- submittedForecasts %>% filter(forecast_start_time > "2021-01-01" & forecast_start_time < "2021-06-30")
 
-matchSite <- match(sf$siteID,allTransitions$siteID)
-phenoDate <- lubridate::yday(sf$forecast_start_time) - allTransitions$day50[matchSite]
+matchSite <- match(gcc_forecast_subset$siteID, allTransitions$siteID)
+gcc_forecast_subset2 <- gcc_forecast_subset %>% 
+  mutate(day85 = allTransitions$day85[matchSite],
+         day50 = allTransitions$day50[matchSite],
+         day15 = allTransitions$day15[matchSite],
+         phenoDate = lubridate::yday(forecast_start_time) - day50)
 
-fit <- lm(crps ~ siteID + horizon + team + phenoDate,data = sf)
+fit <- lm(crps ~ siteID + horizon + team + phenoDate,data = gcc_forecast_subset2)
 summary(fit)
 
-fit2 <- gam(crps ~ siteID + s(horizon) + team + s(phenoDate),data = sf,method="REML")
+fit2 <- gam(crps ~ siteID + s(horizon) + team + s(phenoDate), 
+            data = gcc_forecast_subset2,
+            method="REML")
 summary(fit2)
 
 hnew <- 1:35
