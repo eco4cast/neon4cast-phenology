@@ -102,6 +102,16 @@ multi_team_plot <- function(combined_forecasts, target, theme, date, horizon, si
 
 
 ```{r,echo=FALSE}
+## grab and load forecast (updated based on Slack code snippet from Quinn)
+#remotes::install_github("eco4cast/neon4cast")
+s <- neon4cast::score_schema() 
+s3 <- arrow::s3_bucket(bucket = "scores",
+                         endpoint_override = "data.ecoforecast.org",
+                         anonymous=TRUE)
+  ds <- arrow::open_dataset(s3, schema=s, format = "csv", skip_rows = 1)
+  df <- ds %>% filter(theme == input$forecast,
+                      forecast_start_time > lubridate::as_date("2021-02-01")) %>% collect()
+
 ## grab and load forecasts
 filename = "combined_forecasts_scores.csv.gz"  ## file is updated daily, but right now you need to delete this file to force the system to re-down it
 if(!file.exists(filename)){
@@ -349,7 +359,7 @@ plotStatisticsOverTime <- function(highlightTms = NA, statistic, ylim = c(0, 1),
     vl <- as.numeric(allTransitions[s,(t+1)])
     sdVal <- allTransitions[s,(t+2)]
 
-    plot(x=numeric(),y=numeric(),type="l",xlim=c(-35,0),ylim=ylim,ylab=statistic,xlab="Days Before Transition Date",main=paste(site_names[s],tranDate),bty="n")
+    plot(x=numeric(),y=numeric(),type="l",xlim=c(0,35),ylim=ylim,ylab=statistic,xlab="Days Before Transition Date",main=paste(site_names[s],tranDate),bty="n")
 
     for(tm in 1:n_teams){
       tmSitDat <- sitDat[sitDat$team==teams[tm],] #Subset by team
@@ -380,12 +390,13 @@ plotStatisticsOverTime <- function(highlightTms = NA, statistic, ylim = c(0, 1),
           }
         }
         
-        lines(as.Date(organizedDat$forecast_start_time)-tranDate,computedStat,col=scales::alpha(cls[cl],tF),lwd=lwdVl)
+        lines(tranDate-as.Date(organizedDat$forecast_start_time),computedStat,col=scales::alpha(cls[cl],tF),lwd=lwdVl)
         cl <- cl + 1
       }
     }
   } 
-  plot(x=numeric(),y=numeric(),type="l",xlim=c(-35,0),ylim=c(0,1),ylab="",xlab="",main="Legend",bty="n")
+  plot(x=numeric(),y=numeric(),type="l",xlim=c(0,35),ylim=c(0,1),ylab="",xlab="",
+       xaxt = "n", yaxt = "n", main="Legend",bty="n")
   legend("topleft",as.character(finalTms),col=cls[1:length(finalTms)],lty=rep(1,length(finalTms)),lwd=rep(3,length(finalTms)),bty = "n")
 }
 plotStatisticsOverTime(highlightTms=NA,statistic="bias",ylim=c(-0.1,0.15),s=1) #s indicates the site number
@@ -461,15 +472,21 @@ plotForecastedValuesOverTime(highlightTms = c(2, 11), s = 1)
 
 ```
 
-```{r, echo=FALSE}
+## metadata processing
+```{r}
+
+```
+
+
 ## Lead Time Stats
+```{r, echo=FALSE}
 
 matchSite <- match(gcc_forecast_subset$siteID, allTransitions$siteID)
 gcc_forecast_subset2 <- gcc_forecast_subset %>% 
   mutate(day85 = allTransitions$day85[matchSite],
          day50 = allTransitions$day50[matchSite],
          day15 = allTransitions$day15[matchSite],
-         phenoDate = lubridate::yday(forecast_start_time) - day50)
+         phenoDate = lubridate::yday(forecast_start_time) - day15)
 
 fit <- lm(crps ~ siteID + horizon + team + phenoDate,data = gcc_forecast_subset2)
 summary(fit)
@@ -485,7 +502,8 @@ plot(hnew,crps_horiz,xlab="Horizon",ylab="predicted CRPS")
 
 pDnew <- -80:40
 crps_pD <- predict(fit2,data.frame(horizon=1,siteID="HARV",team="EFInull",phenoDate=pDnew))
-plot(pDnew,crps_pD,xlab="Days from 50%",ylab="predicted CRPS")
+plot(pDnew,crps_pD,xlab="Days from 15%",ylab="predicted CRPS")
+abline(v=0,lty=2)
 
 
 
