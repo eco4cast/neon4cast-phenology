@@ -126,12 +126,18 @@ if(!file.exists(filename)){
                         base_url = "ecoforecast.org")
 }
 submittedForecasts <- readr::read_csv(filename, col_names = TRUE)
-gccForecasts <- subset(submittedForecasts, target == "gcc_90")
+gccForecastsALL <- subset(submittedForecasts, target == "gcc_90")
+springTeams <- c("PhenoPhriends", "PEG_RFR2","CU_Pheno","EFI_U_P","VT_Ph_GDD",
+                 "CSP_Gwave","greenbears_par","PEG_RFR0","PEG_RFR","greenbears_gams",
+                 "greenbears_stl","DALEC_SIP","PEG","Fourier","
+                 Team_MODIS","greenbears","EFInull","UCSC_P_EDM","climatology")
+gccForecasts <- subset(gccForecastsALL,team %in% springTeams) #Subset to only include the teams that submitted spring forecasts and not the ones that joined for autumn 
 
 teams <- unique(gccForecasts$team)
 n_teams <- length(teams)
 
 site_names <- c("HARV", "BART", "SCBI", "STEI", "UKFS", "GRSM", "DELA", "CLBJ")
+n_sites <- length(site_names)
 ```
 ### Exploratory Data Analysis
 
@@ -399,9 +405,9 @@ plotStatisticsOverTime <- function(highlightTms = NA, statistic, ylim = c(0, 1),
        xaxt = "n", yaxt = "n", main="Legend",bty="n")
   legend("topleft",as.character(finalTms),col=cls[1:length(finalTms)],lty=rep(1,length(finalTms)),lwd=rep(3,length(finalTms)),bty = "n")
 }
-plotStatisticsOverTime(highlightTms=NA,statistic="bias",ylim=c(-0.1,0.15),s=1) #s indicates the site number
-plotStatisticsOverTime(highlightTms=NA,statistic="CRPS",ylim=c(0,0.15),s=1)
-#plotStatisticsOverTime(highlightTms=NA,statistic="MAE",ylim=c(0,0.15),s=1)
+#plotStatisticsOverTime(highlightTms=NA,statistic="bias",ylim=c(-0.1,0.15),s=1) ##Shows the same as CRPS so going to comment out for simplicity #s indicates the site number
+plotStatisticsOverTime(highlightTms=NA,statistic="CRPS",ylim=c(0,0.15),s=2) 
+
 
 
 ```
@@ -416,27 +422,30 @@ plotStatisticsOverTime(highlightTms=NA,statistic="CRPS",ylim=c(0,0.15),s=1)
 ## Based on Kathryn's code in ESA2021_PresentationFigures.R
 ## updated for new data format
 
-s=1
-
-sitDat <- gccForecasts[gccForecasts$siteID==site_names[s],] #Subset by site
+#Subset by site
 cls <- c("#004949","#000000",paletteMartin[3:15])
 
 ##pdf(file="ForecastedValuesOnTransitionDates_presentationFigures.pdf",height=5,width=12)
-par(mfrow=c(1,4),mai=c(0.5,0.5,1,0.1))
 
-plotForecastedValuesOverTime <- function(highlightTms=NA,s){
+plotForecastedValuesOverTime <- function(s){
+  par(mfrow=c(1,4),mai=c(0.5,0.5,1,0.1))
   finalTms <- character()
+  sitDat <- gccForecasts[gccForecasts$siteID==site_names[s],] 
   for(t in c(2,5,8)){ #Loops over the transition dates
     cl <- 1
-    tranDate <- as.Date(unlist(allTransitions[s,t]),origin=as.Date("2020-12-31"))
     vl <- as.numeric(allTransitions[s,(t+1)])
     sdVal <- allTransitions[s,(t+2)]
     vl <- rescale(vl,to=c(0,1),from=c(allTransitions$minimum[s],allTransitions$maximum[s])) ##Rescales gcc values between 0 and 1
-    plot(x=numeric(),y=numeric(),type="l",xlim=c(-35,0),ylim=c(0,1),ylab="",xlab="Days Before Transition Date",main=paste(site_names[s],tranDate),bty="n")
+    plot(x=numeric(),y=numeric(),type="l",xlim=c(-35,0),ylim=c(0,1),ylab="",xlab="Days Before Transition Date",main=paste(site_names[s],round(vl,digits=2)),bty="n")
     
     abline(h=vl,col="red",lwd=5,lty=2)
     for(tm in 1:n_teams){
       tmSitDat <- sitDat[sitDat$team==teams[tm],] #Subset by team
+      allPlottedData <- matrix(nrow=length(site_names),ncol=35) #35 columns for the different forecast horizons 
+      #for(s in 1:length(site_names)){
+      
+      tranDate <- as.Date(unlist(allTransitions[s,t]),origin=as.Date("2020-12-31"))
+      beforeDays <- seq(tranDate-34,tranDate,by="day")
       organizedDat <- tmSitDat[as.Date(tmSitDat$time)==tranDate,] #Subset of the forecasts that forecasted the transition date 
       if(nrow(organizedDat)>0){
         if(t==8){
@@ -447,29 +456,102 @@ plotForecastedValuesOverTime <- function(highlightTms=NA,s){
         for(j in 1:length(rescaledDat)){ #Some values get scaled below 0 
           rescaledDat[j] <- max(rescaledDat[j],0)
         }
-        if(is.na(highlightTms) || tm%in%highlightTms){ #No transparency if you do not want to highlight teams 
-                                                       #or if the team is within the highlighted teams
-          tF <- 1
-          lwdVl <- 3
-        }else{
-          tF <- 0.2
-          lwdVl <- 1
+        for(d in 1:length(beforeDays)){ #Not all teams submitted forecasts for all 35 forecast horizons 
+          replacement <- rescaledDat[organizedDat$forecast_start_time==beforeDays[d]]
+          if(length(replacement)==0){
+            if(d>1){
+              if(!is.na(allPlottedData[s,(d-1)])){
+                replacement <- allPlottedData[s,(d-1)] #filling in missing predictions with the previous day's 
+              }else{
+                replacement <- NA   
+              }
+            }else{
+              replacement <- NA   
+            }
+          }
+          allPlottedData[s,d] <- replacement[length(replacement)]#Some teams occassionally submitted multiple forecasts on a day so taking the last one submitted
         }
-        lines(as.Date(organizedDat$forecast_start_time)-tranDate,rescaledDat,col=scales::alpha(cls[cl],tF),lwd=lwdVl)
-        cl <- cl + 1
+        # }
+        #}
+        
+        # ecoforecastR::ciEnvelope(x=seq(-35,-1)[!is.na(colMeans(allPlottedData,na.rm = TRUE))],
+        #                          ylo = apply(allPlottedData[,!is.na(colMeans(allPlottedData,na.rm = TRUE))], MARGIN=2, min, na.rm=TRUE),
+        #                          yhi=apply(allPlottedData[,!is.na(colMeans(allPlottedData,na.rm = TRUE))],MARGIN = 2, max, na.rm=TRUE),
+        #                          col=scales::alpha(cls[cl],0.5))
+        lines(seq(-35,-1),colMeans(allPlottedData,na.rm = TRUE),col=cls[cl],lwd=2)
+        cl <- cl + 1 #move to next color for plotting 
       }
     }
-  } 
+  }
   plot(x=numeric(),y=numeric(),type="l",xlim=c(-35,0),ylim=c(0,1),ylab="",xlab="",main="Legend",bty="n")
   legend("topleft",c("True Value",as.character(finalTms)),col=c("red",cls[1:length(finalTms)]),lty=c(2,rep(1,length(finalTms))),lwd=c(2,rep(3,length(finalTms))),bty = "n")
 }
-plotForecastedValuesOverTime(s=1)#s indicates the site number
-plotForecastedValuesOverTime(highlightTms = 12, s = 1)
-plotForecastedValuesOverTime(highlightTms = 1, s = 1)
-plotForecastedValuesOverTime(highlightTms = 13, s = 1)
-plotForecastedValuesOverTime(highlightTms = c(2, 11), s = 1)
-##dev.off()
+plotForecastedValuesOverTime(s=1) #s indicates the site number
 
+
+```
+
+```{r}
+#Calculate the Forecast Horizons (i.e., The earliest day before the transition each model's predictions was better than climatology)
+allForecastHorizons_clim <- matrix(nrow=0,ncol=4)
+
+for(s in 1:length(site_names)){
+  sitDat <- gccForecasts[gccForecasts$siteID==site_names[s],] 
+  sitDat_climatology <- sitDat[sitDat$team=="climatology",]
+  
+  for(t in c(2,5,8)){ #Loops over the transition dates
+    tranDate <- as.Date(unlist(allTransitions[s,t]),origin=as.Date("2020-12-31"))
+    vl <- as.numeric(allTransitions[s,(t+1)])
+    vl <- round(rescale(vl,to=c(0,1),from=c(allTransitions$minimum[s],allTransitions$maximum[s])),digits=2)
+    clim_tranDat <- sitDat_climatology[as.Date(sitDat_climatology$time)==tranDate,]
+    clim_tranDat <- clim_tranDat[3:37,]
+    for(tm in 1:n_teams){
+      tmSitDat <- sitDat[sitDat$team==teams[tm],] #Subset by team
+      tm_tranDat <- tmSitDat[as.Date(tmSitDat$time)==tranDate,]
+      if(nrow(tm_tranDat)>0){
+        mergedDat <- merge(tm_tranDat,clim_tranDat,'forecast_start_time')
+        forecastHorizon <- as.numeric(tranDate-mergedDat$forecast_start_time[which(mergedDat$crps.x<=mergedDat$crps.y)[1]])
+        if(length(forecastHorizon)==0 | is.na(forecastHorizon)){
+          forecastHorizon <- 0
+        }
+        allForecastHorizons_clim <- rbind(allForecastHorizons_clim,
+                                          c(site_names[s],vl,teams[tm],forecastHorizon))
+      }else{ #Team didn't forecast this date
+        allForecastHorizons_clim <- rbind(allForecastHorizons_clim,
+                                          c(site_names[s],vl,teams[tm],NA))
+      }
+    }
+  }
+}
+allForecastHorizons_clim <- cbind(allForecastHorizons_clim,rep(NA,nrow(allForecastHorizons_clim)))
+colnames(allForecastHorizons_clim) <- c("site","trans","tm","forecastHorizon","tmAvg")
+
+for(i in 1:nrow(allForecastHorizons_clim)){
+  tmSubset <- allForecastHorizons_clim[allForecastHorizons_clim[,3]==allForecastHorizons_clim[i,3],]
+  tmSubsetTran <- tmSubset[tmSubset[,2]==allForecastHorizons_clim[i,2],]
+  allForecastHorizons_clim[i,5] <- mean(as.numeric(tmSubsetTran[,4]),na.rm=TRUE)
+  if(is.nan(allForecastHorizons_clim[i,5])){
+    allForecastHorizons_clim[i,5] <- 0
+  }
+}
+d <- as.data.frame(allForecastHorizons_clim)
+d <- d %>% 
+  subset(tm != "climatology") %>%
+  ungroup() %>%
+  arrange(as.factor(trans),-as.numeric(as.character(tmAvg)),as.factor(tm)) %>%
+  mutate(.r=((floor(row_number()/(n_sites+0.000001)))+1)) 
+
+ggplot(d,aes(.r,as.numeric(as.character(forecastHorizon)),colour=site)) +
+  geom_point(position = position_jitter(w = 0.3, h = 0))+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle=90))+
+  xlab("Team (Sorted by Average Horizon)")+
+  ylab("Forecast Horizon")+
+  ggtitle("Compared to Climatology Estimate")+
+  facet_wrap(~trans,scales="free")+
+  scale_x_continuous(
+    breaks = d$.r[seq(1,length(d$.r),length(site_names))],
+    labels=as.character(d$tm[seq(1,length(d$.r),length(site_names))]))
 ```
 
 ## metadata processing
@@ -478,20 +560,22 @@ plotForecastedValuesOverTime(highlightTms = c(2, 11), s = 1)
 ```
 
 
+
 ## Lead Time Stats
 ```{r, echo=FALSE}
 
 matchSite <- match(gcc_forecast_subset$siteID, allTransitions$siteID)
-gcc_forecast_subset2 <- gcc_forecast_subset %>% 
+gcc_forecast_subset2 <- gcc_forecast_subset %>%
   mutate(day85 = allTransitions$day85[matchSite],
          day50 = allTransitions$day50[matchSite],
          day15 = allTransitions$day15[matchSite],
          phenoDate = lubridate::yday(forecast_start_time) - day15)
+#phenoDate is the number of days after the 15% green-up date
 
 fit <- lm(crps ~ siteID + horizon + team + phenoDate,data = gcc_forecast_subset2)
 summary(fit)
 
-fit2 <- gam(crps ~ siteID + s(horizon) + team + s(phenoDate), 
+fit2 <- gam(crps ~ siteID + s(horizon) + team + s(phenoDate),
             data = gcc_forecast_subset2,
             method="REML")
 summary(fit2)
@@ -504,8 +588,45 @@ pDnew <- -80:40
 crps_pD <- predict(fit2,data.frame(horizon=1,siteID="HARV",team="EFInull",phenoDate=pDnew))
 plot(pDnew,crps_pD,xlab="Days from 15%",ylab="predicted CRPS")
 abline(v=0,lty=2)
+plot(pDnew,crps_pD,xlab="Days from 50%",ylab="predicted CRPS")
+print(paste("We are worst at predicting:",pDnew[which.max(crps_pD)],"days before 15% green-up"))
 
-
+plotPredictability <- function(trans){
+  matchSite <- match(gcc_forecast_subset$siteID, allTransitions$siteID)
+  if(trans==0.50){
+    gcc_forecast_subset2 <- gcc_forecast_subset %>% 
+      mutate(day85 = allTransitions$day85[matchSite],
+             day50 = allTransitions$day50[matchSite],
+             day15 = allTransitions$day15[matchSite],
+             phenoDate = lubridate::yday(forecast_start_time) - day50)
+  }else if(trans==0.15){
+    gcc_forecast_subset2 <- gcc_forecast_subset %>% 
+      mutate(day85 = allTransitions$day85[matchSite],
+             day50 = allTransitions$day50[matchSite],
+             day15 = allTransitions$day15[matchSite],
+             phenoDate = lubridate::yday(forecast_start_time) - day15)
+  }else if(trans==0.85){
+    gcc_forecast_subset2 <- gcc_forecast_subset %>% 
+      mutate(day85 = allTransitions$day85[matchSite],
+             day50 = allTransitions$day50[matchSite],
+             day15 = allTransitions$day15[matchSite],
+             phenoDate = lubridate::yday(forecast_start_time) - day85)
+  }
+  fit <- gam(crps ~ siteID + s(horizon) + team + s(phenoDate), 
+             data = gcc_forecast_subset2,
+             method="REML")
+  
+  pDnew <- -80:40
+  crps_pD <- predict(fit,data.frame(horizon=1,siteID="HARV",team="EFInull",phenoDate=pDnew))
+  plot(pDnew,crps_pD,xlab=paste0("Days from ",trans*100,"% Greenup"),ylab="predicted CRPS",ylim=c(0.005,0.03),pch=20)
+  abline(v=0,lty=2,col="gray")
+  print(pDnew[which.max(crps_pD)])
+  abline(v=pDnew[which.max(crps_pD)],col="red")
+}
+par(mfrow=c(1,3))
+plotPredictability(trans=0.15)
+plotPredictability(trans=0.50)
+plotPredictability(trans=0.85)
 
 ```
 
