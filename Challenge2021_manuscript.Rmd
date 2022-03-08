@@ -559,11 +559,97 @@ ggplot(d,aes(.r,as.numeric(as.character(forecastHorizon)),colour=site)) +
 
 ## metadata processing
 ```{r}
-object <- aws.s3::get_bucket_df("scores", 
-                             region = "data",
-                             base_url = "ecoforecast.org")
-tools::file_ext(object$Key)
-### none of these are EML
+## grab the names of all the EMLs
+obj <- aws.s3::get_bucket("forecasts",
+                               prefix = "phenology",
+                               region = "data",
+                               base_url = "ecoforecast.org",
+                               max = Inf)
+object = as.data.frame(obj)
+emls = which(tools::file_ext(object$Key) == "xml")
+## find the most recent for each team
+eparse <- gsub(pattern = "phenology-",replacement = "",x = basename(object$Key),fixed = TRUE)
+edate <- as.Date(substr(eparse,1,10))
+eteam <- substring(eparse,12)
+object = cbind(object,edate,eteam)
+## only 4 teams sent in EML!!!!
+toGrab = object[emls,] %>% group_by(eteam) %>% slice_max(edate)
+fname = rep(NA,nrow(toGrab))
+for(i in seq_along(fname)){
+  fname[i] = aws.s3::save_object(obj[[which(object[,"Key"]==toGrab$Key[i])]], 
+                        bucket = "forecasts", 
+                        region = "data",
+                        base_url = "ecoforecast.org")
+}
+
+nsobj<- aws.s3::get_bucket("forecasts",
+                               prefix = "not_in_standard",
+                               region = "data",
+                               base_url = "ecoforecast.org",
+                               max = Inf)
+nsobject = as.data.frame(nsobj)
+nsemls = which(tools::file_ext(nsobject$Key) %in% c("xml","eml","yml"))
+nsemls = nsemls[grepl("phenology",nsobject[nsemls,"Key"])]
+# nsobject[nsemls,"Key"]
+## one additional team had XML that failed to parse, and a couple more had .eml and .yml files
+toGrab = c("not_in_standard/phenology-metadata-VT_Ph_GDD.yml","not_in_standard/phenology-2021-05-09-CU_Pheno.yml","not_in_standard/phenology-2021-04-14-UCSC_P_EDM.eml","not_in_standard/phenology-2021-03-19-PEG.xml")
+fname2 = rep(NA,length(toGrab))
+for(i in seq_along(toGrab)){
+  fname2[i] = aws.s3::save_object(nsobj[[which(nsobject[,"Key"]==toGrab[i])]], 
+                        bucket = "forecasts", 
+                        region = "data",
+                        base_url = "ecoforecast.org")
+}
+fname = c(fname,fname2)
+fname
+
+lexists <- function(list,name){
+  name %in% names(list)
+}
+
+## Things we want to pull out::
+## model type
+## for each uncertainty: status, complexity
+meta <- as.data.frame(matrix(NA,n_teams,12))
+row.names(meta) <- teams
+colnames(meta) <- c("type","drivers","ndrivers","initial_conditions","ninitial_conditions","parameters","nparameters","process_error","nprocess_error","obs_error","random_effects","nrandom_effects")
+for(i in seq_along(fname)){
+  j = names(unlist(tapply(teams,teams,grep,fname[i])))
+  if(tools::file_ext(fname[i]) %in% c("xml","eml")){
+    md <- EML::read_eml(fname[i])
+    md <- EML::eml_get(md, "additionalMetadata") %>% EML::eml_get("forecast")
+  } else {
+    md = yaml::read_yaml(fname[i])
+    md = md$metadata$forecast  
+  }
+  if(lexists(md,"model_description")){
+    meta[j,"type"] = md$model_description$type
+  }
+  if(lexists(md,"drivers")){
+    if(lexists(md$drivers,"status")) meta[j,"drivers"] = md$drivers$status
+    if(lexists(md$drivers,"complexity")) meta[j,"ndrivers"] = md$drivers$complexity
+  }
+  if(lexists(md,"initial_conditions")){
+    if(lexists(md$initial_conditions,"status")) meta[j,"initial_conditions"] = md$initial_conditions$status
+    if(lexists(md$initial_conditions,"complexity")) meta[j,"ninitial_conditions"] = md$initial_conditions$complexity
+  }
+  if(lexists(md,"parameters")){
+    if(lexists(md$parameters,"status"))meta[j,"parameters"] = md$parameters$status
+    if(lexists(md$parameters,"complexity")) meta[j,"nparameters"] = md$parameters$complexity
+  }
+  if(lexists(md,"process_error")){
+    if(lexists(md$process_error,"status")) meta[j,"process_error"] = md$process_error$status
+    if(lexists(md$process_error,"complexity")) meta[j,"nprocess_error"] = md$process_error$complexity
+  }
+  if(lexists(md,"obs_error")){
+    if(lexists(md$obs_error,"status")) meta[j,"obs_error"] = md$obs_error$status
+  }
+  if(lexists(md,"random_effects")){
+    if(lexists(md$random_effects,"status")) meta[j,"random_effects"] = md$random_effects$status
+    if(lexists(md$random_effects,"complexity")) meta[j,"nrandom_effects"] = md$random_effects$complexity
+  }
+}
+
 
 ```
 
