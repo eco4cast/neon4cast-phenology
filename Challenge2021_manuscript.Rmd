@@ -108,10 +108,12 @@ s <- neon4cast::score_schema()
 s3 <- arrow::s3_bucket(bucket = "scores",
                          endpoint_override = "data.ecoforecast.org",
                          anonymous=TRUE)
-  ds <- arrow::open_dataset(s3, schema=s, format = "csv", skip_rows = 1)
-  df <- ds %>% filter(theme == input$forecast,
-                      forecast_start_time > lubridate::as_date("2021-02-01")) %>% collect()
+ds <- arrow::open_dataset(s3, schema=s, format = "csv", skip_rows = 1)
+df <- ds %>% filter(theme == "phenology", target=="gcc_90",
+                      forecast_start_time < lubridate::as_date("2021-06-30")) %>% collect()
 
+## OLD CODE
+if(FALSE){
 ## grab and load forecasts
 filename = "combined_forecasts_scores.csv.gz"  ## file is updated daily, but right now you need to delete this file to force the system to re-down it
 if(!file.exists(filename)){
@@ -132,6 +134,7 @@ springTeams <- c("PhenoPhriends", "PEG_RFR2","CU_Pheno","EFI_U_P","VT_Ph_GDD",
                  "greenbears_stl","DALEC_SIP","PEG","Fourier","
                  Team_MODIS","greenbears","EFInull","UCSC_P_EDM","climatology")
 gccForecasts <- subset(gccForecastsALL,team %in% springTeams) #Subset to only include the teams that submitted spring forecasts and not the ones that joined for autumn 
+}
 
 teams <- unique(gccForecasts$team)
 n_teams <- length(teams)
@@ -556,6 +559,11 @@ ggplot(d,aes(.r,as.numeric(as.character(forecastHorizon)),colour=site)) +
 
 ## metadata processing
 ```{r}
+object <- aws.s3::get_bucket_df("scores", 
+                             region = "data",
+                             base_url = "ecoforecast.org")
+tools::file_ext(object$Key)
+### none of these are EML
 
 ```
 
