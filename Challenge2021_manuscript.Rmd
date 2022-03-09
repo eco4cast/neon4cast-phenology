@@ -426,7 +426,7 @@ plotStatisticsOverTime(highlightTms=NA,statistic="CRPS",ylim=c(0,0.15),s=2)
 ## updated for new data format
 
 #Subset by site
-cls <- c("#004949","#000000",paletteMartin[3:15])
+cls <- c(paletteMartin[c(2,1,3:15)])
 
 ##pdf(file="ForecastedValuesOnTransitionDates_presentationFigures.pdf",height=5,width=12)
 
@@ -610,9 +610,9 @@ lexists <- function(list,name){
 ## Things we want to pull out::
 ## model type
 ## for each uncertainty: status, complexity
-meta <- as.data.frame(matrix(NA,n_teams,12))
+meta <- as.data.frame(matrix(NA,n_teams,13))
 row.names(meta) <- teams
-colnames(meta) <- c("type","drivers","ndrivers","initial_conditions","ninitial_conditions","parameters","nparameters","process_error","nprocess_error","obs_error","random_effects","nrandom_effects")
+colnames(meta) <- c("type","name","drivers","ndrivers","initial_conditions","ninitial_conditions","parameters","nparameters","process_error","nprocess_error","obs_error","random_effects","nrandom_effects")
 for(i in seq_along(fname)){
   j = names(unlist(tapply(teams,teams,grep,fname[i])))
   if(tools::file_ext(fname[i]) %in% c("xml","eml")){
@@ -624,6 +624,7 @@ for(i in seq_along(fname)){
   }
   if(lexists(md,"model_description")){
     meta[j,"type"] = md$model_description$type
+    if(lexists(md$model_description,"name"))    meta[j,"name"] = md$model_description$name
   }
   if(lexists(md,"drivers")){
     if(lexists(md$drivers,"status")) meta[j,"drivers"] = md$drivers$status
@@ -650,26 +651,56 @@ for(i in seq_along(fname)){
   }
 }
 
+## Recoding
+meta$drivers[meta$drivers == "absent"] = FALSE
+meta$drivers[!is.na(meta$drivers) & meta$drivers != FALSE] = TRUE
+meta$initial_conditions[meta$initial_conditions == "absent"] = FALSE
+meta$initial_conditions[!is.na(meta$initial_conditions) & meta$initial_conditions != FALSE] = TRUE
+
+## hacks
+meta[c("PEG","PEG_RFR2","greenbears_gams","greenbears_stl"),"initial_conditions"] = FALSE
+meta[c("PEG_RFR","PEG_RFR0","DALEC_SIP","PhenoPhriends","EFInull"),"initial_conditions"] = TRUE
+
+meta[c("PEG","greenbears_gams","greenbears_stl","EFInull"),"drivers"] = FALSE
+meta[c("PEG_RFR","PEG_RFR0","PEG_RFR2","DALEC_SIP","PhenoPhriends","greenbears_par"),"drivers"] = TRUE
+
+meta$class <- paste0(meta$drivers,meta$initial_conditions)
+meta$team <- rownames(meta)
+meta$class[meta$team == "climatology"] = "clim"
 
 ```
 
 
 
 ## Lead Time Stats
+
+Prep data
 ```{r, echo=FALSE}
+gcc_forecast_subset3 <- gcc_forecast_subset %>% left_join(y=meta,by = "team")
+
 
 matchSite <- match(gcc_forecast_subset$siteID, allTransitions$siteID)
-gcc_forecast_subset2 <- gcc_forecast_subset %>%
+gcc_forecast_subset2 <- gcc_forecast_subset3 %>%
   mutate(day85 = allTransitions$day85[matchSite],
          day50 = allTransitions$day50[matchSite],
          day15 = allTransitions$day15[matchSite],
          phenoDate = lubridate::yday(forecast_start_time) - day15)
 #phenoDate is the number of days after the 15% green-up date
+```
 
+Linear models
+```{r, echo=FALSE}
 fit <- lm(crps ~ siteID + horizon + team + phenoDate,data = gcc_forecast_subset2)
 summary(fit)
 
-fit2 <- gam(crps ~ siteID + s(horizon) + team + s(phenoDate),
+fit3 <- lm(crps ~ siteID + horizon + phenoDate + class,data = gcc_forecast_subset2)
+summary(fit3)
+```
+
+
+Overall GAM: site, team, horizon, phenoDate
+```{r, echo=FALSE}
+fit2 <- mgcv::gam(crps ~ siteID + s(horizon) + team + s(phenoDate),
             data = gcc_forecast_subset2,
             method="REML")
 summary(fit2)
@@ -682,7 +713,6 @@ pDnew <- -80:40
 crps_pD <- predict(fit2,data.frame(horizon=1,siteID="HARV",team="EFInull",phenoDate=pDnew))
 plot(pDnew,crps_pD,xlab="Days from 15%",ylab="predicted CRPS")
 abline(v=0,lty=2)
-plot(pDnew,crps_pD,xlab="Days from 50%",ylab="predicted CRPS")
 print(paste("We are worst at predicting:",pDnew[which.max(crps_pD)],"days before 15% green-up"))
 
 plotPredictability <- function(trans){
@@ -721,8 +751,223 @@ par(mfrow=c(1,3))
 plotPredictability(trans=0.15)
 plotPredictability(trans=0.50)
 plotPredictability(trans=0.85)
+```
+
+
+*GAM: Horizon and phenoDate by team*
+fits
+```{r, echo=FALSE}
+## FIT HORIZON AN PHENODATE BY TEAM
+# Ran overnight but never finished
+#fit5 <- mgcv::gam(crps ~ siteID + s(horizon,by=as.factor(team)) + team + s(phenoDate,by=as.factor(team)),
+#            data = gcc_forecast_subset2,
+#            method="REML")
+if(!file.exists("fit5.RDS")){
+  fit5 <- list()
+  for(i in seq_along(teams)){
+    print(i)
+    gcc_team <- gcc_forecast_subset2 %>% filter(team == teams[i])
+    fit5[[i]] <- try(mgcv::gam(crps ~ s(horizon) + s(phenoDate),
+                               data = gcc_team,
+                               method="REML"))
+    saveRDS(fit5,file="fit5.RDS")
+  }
+} else {
+  readRDS("fit5.RDS")
+}
+names(fit5) <- teams
+lapply(fit5,summary)
+
+## "all model" equivalent for comparision
+fit5a <- mgcv::gam(crps ~ s(horizon) + s(phenoDate),
+            data = gcc_forecast_subset2,
+            method="REML")
 
 ```
+
+plots
+```{r, echo=FALSE}
+## horizon plot
+hnew <- 1:35
+crps_horiz5 <- list()
+for(i in seq_along(teams)){
+  if("try-error" %in% class(fit5[[i]])){
+    crps_horiz5[[i]] <- NA
+  } else {
+    crps_horiz5[[i]] <- predict(fit5[[i]],data.frame(horizon=hnew,phenoDate=0))
+  }
+}
+crps_horiz5a <- predict(fit5a,data.frame(horizon=hnew,phenoDate=0))
+h5range = c(min(sapply(crps_horiz5,min),na.rm=TRUE),
+            max(sapply(crps_horiz5,max),na.rm=TRUE))
+cls <- paletteMartin[c(2,1,3:15)]
+
+toPlot5 <- c()
+j = 0
+plot(hnew,crps_horiz5a,xlab="Lead Time",ylab="predicted CRPS",
+     ylim=h5range,type='l',lwd=1,lty=2)
+for(i in seq_along(teams)){
+  if(!("try-error" %in% class(fit5[[i]]))){
+    j = j+1; toPlot5 = c(toPlot5,i)
+    lines(hnew,crps_horiz5[[i]],col=cls[j],lwd=3)
+  }
+}
+legend("topleft",col=cls,lwd = 2, lty=1, legend = teams[toPlot5],cex=0.5,ncol=3)
+
+#HORIZON: Relative error
+plot(hnew,crps_horiz5a/crps_horiz5a[1],xlab="Lead Time",ylab="predicted CRPS",
+     ylim=c(0.75,2),type='l',lwd=1,lty=2)
+for(i in seq_along(toPlot5)){
+  y = crps_horiz5[[toPlot5[i]]]
+  lines(hnew,y/y[1],col=cls[i],lwd=3)
+}
+legend("topleft",col=cls,lwd = 2, lty=1, legend = teams[toPlot5],cex=0.5,ncol=3)
+
+#HORIZON: delCRPS
+plot(hnew,crps_horiz5a-crps_horiz5a[1],xlab="Lead Time",ylab="delCRPS",
+     ylim=c(-0.005,0.025),type='l',lwd=1,lty=2)
+for(i in seq_along(toPlot5)){
+  y = crps_horiz5[[toPlot5[i]]]
+  lines(hnew,y-y[1],col=cls[i],lwd=3)
+}
+legend("topleft",col=cls,lwd = 2, lty=1, legend = teams[toPlot5],cex=0.5,ncol=3)
+
+## phenoDate plot
+
+pD_team <- gcc_forecast_subset2 %>%  group_by(team) %>%
+  summarise(min = min(phenoDate,na.rm = TRUE), max=max(phenoDate,na.rm = TRUE))
+
+crps_pD5 <- list()
+pDnew <- list()
+for(i in toPlot5){
+    pDnew[[i]] <- pD_team$min[i]:pD_team$max[i]
+    crps_pD5[[i]] <- predict(fit5[[i]],data.frame(horizon=1,phenoDate=pDnew[[i]]))
+}
+crps_pD5a <- predict(fit5a,data.frame(horizon=1,phenoDate=-80:40))
+#p5range = c(min(sapply(crps_pD5,min),na.rm=TRUE),
+#            max(sapply(crps_pD5,max),na.rm=TRUE))
+
+plot(-80:40,crps_pD5a,xlab="Days from 15%",ylab="predicted CRPS",
+     ylim=h5range,type='l',lwd=1,lty=2,xlim=c(-80,40))
+for(i in seq_along(toPlot5)){
+    lines(pDnew[[toPlot5[i]]],crps_pD5[[toPlot5[i]]],col=cls[i],lwd=3)
+}
+abline(v=0,lty=2)
+legend("topleft",col=cls,lwd = 2, lty=1, legend = teams[toPlot5],cex=0.5,ncol=3)
+
+## find max
+pD5max = rep(NA,length(teams))
+for(i in toPlot5){
+  pD5max[i] = pDnew[[i]][which.max(crps_pD5[[i]])]
+}
+pD5max[pD5max>40] = NA ## remove outlier
+hist(pD5max,breaks = 6)
+abline(v=mean(pD5max,na.rm = TRUE))
+mean(pD5max,na.rm = TRUE)
+```
+
+*GAM: Horizon and phenodate by model class*
+fit
+```{r,echo=FALSE}
+# didn't converge
+#fit4 <- mgcv::gam(crps ~ siteID + class + s(horizon,by=as.factor(class)) + team + s(phenoDate),
+#            data = gcc_forecast_subset2,
+#            method="REML")
+#summary(fit4)
+
+mtype = unique(gcc_forecast_subset2$class)
+if(!file.exists("fit4.RDS")){
+  fit4 <- list()
+  for(i in seq_along(mtype)){
+    print(i)
+    gcc_mtype <- gcc_forecast_subset2 %>% filter(class == mtype[i])
+    fit4[[i]] <- try(mgcv::gam(crps ~ s(horizon) + s(phenoDate),
+                               data = gcc_mtype,
+                               method="REML"))
+    saveRDS(fit4,file="fit4.RDS")
+  }
+} else {
+  readRDS("fit4.RDS")
+}
+names(fit4) <- mtype
+lapply(fit4,summary)
+
+```
+
+plots
+```{r,echo=FALSE}
+mname = c("clim","covariate","NA","dynamic","persist","static")
+
+## horizon plot
+hnew <- 1:35
+crps_horiz4 <- list()
+for(i in seq_along(mtype)){
+    crps_horiz4[[i]] <- predict(fit4[[i]],data.frame(horizon=hnew,phenoDate=0))
+}
+h4range = c(min(sapply(crps_horiz4,min),na.rm=TRUE),
+            max(sapply(crps_horiz4,max),na.rm=TRUE))
+cls <- paletteMartin
+
+plot(hnew,crps_horiz5a,xlab="Lead Time",ylab="predicted CRPS",
+     ylim=h4range,type='l',lwd=1,lty=2)
+for(i in seq_along(mtype)){
+    lines(hnew,crps_horiz4[[i]],col=cls[i],lwd=3)
+}
+legend("topleft",col=cls[seq_along(mtype)],lwd = 2, lty=1, legend = mname,cex=0.5,ncol=3)
+
+#HORIZON: Relative error
+plot(hnew,crps_horiz5a/crps_horiz5a[1],xlab="Lead Time",ylab="relative CRPS",
+     ylim=c(0.75,2),type='l',lwd=1,lty=2)
+for(i in seq_along(mtype)){
+  if(mtype[i] == "NANA") next
+  y = crps_horiz4[[i]]
+  lines(hnew,y/y[1],col=cls[i],lwd=3)
+}
+legend("topleft",col=cls[seq_along(mtype)],lwd = 2, lty=1, legend = mname,cex=0.5,ncol=3)
+
+#HORIZON: delCRPS
+plot(hnew,crps_horiz5a-crps_horiz5a[1],xlab="Lead Time",ylab="delCRPS",
+     ylim=c(-0.005,0.025),type='l',lwd=1,lty=2)
+for(i in seq_along(mtype)){
+  y = crps_horiz4[[i]]
+  lines(hnew,y-y[1],col=cls[i],lwd=3)
+}
+legend("topleft",col=cls[seq_along(mtype)],lwd = 2, lty=1, legend = mname,cex=0.5,ncol=3)
+
+## phenoDate plot
+pD_mtype <- gcc_forecast_subset2 %>%  group_by(class) %>%
+  summarise(min = min(phenoDate,na.rm = TRUE), max=max(phenoDate,na.rm = TRUE))
+pD_mtype$min[pD_mtype$min < -80] = -80 ## standardize start date
+crps_pD4 <- list()
+pDnew4 <- list()
+for(i in seq_along(mtype)){
+    pDnew4[[i]] <- pD_mtype$min[i]:pD_mtype$max[i]
+    crps_pD4[[i]] <- predict(fit4[[i]],data.frame(horizon=1,phenoDate=pDnew4[[i]]))
+}
+
+plot(-80:40,crps_pD5a,xlab="Days from 15%",ylab="predicted CRPS",
+     ylim=h5range,type='l',lwd=1,lty=2,xlim=c(-80,40))
+for(i in seq_along(mtype)){
+    lines(pDnew4[[i]],crps_pD4[[i]],col=cls[i],lwd=3)
+}
+abline(v=0,lty=2)
+legend("topleft",col=cls[seq_along(mtype)],lwd = 2, lty=1, legend = mname,cex=0.5,ncol=3)
+
+# phenodate: delCRPS
+plot(-80:40,crps_pD5a-crps_pD5a[1],xlab="Days from 15%",ylab="delCRPS",
+     ylim=h5range,type='l',lwd=1,lty=2,xlim=c(-80,40))
+for(i in seq_along(mtype)){
+    y = crps_pD4[[i]]
+    lines(pDnew4[[i]],y-y[1],col=cls[i],lwd=3)
+}
+abline(v=0,lty=2)
+legend("topleft",col=cls[seq_along(mtype)],lwd = 2, lty=1, legend = mname,cex=0.5,ncol=3)
+
+
+
+
+```
+
 
 Comment from Luke: Another open Q is how we will deal with variability in predictive performance across sites. Perhaps one’s fixed effects lead to great performance at site A, but very poor (e.g., strongly biased) performance at site B.
 
