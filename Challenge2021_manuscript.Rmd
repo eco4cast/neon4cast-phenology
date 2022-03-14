@@ -134,7 +134,14 @@ springTeams <- c("PhenoPhriends", "PEG_RFR2","CU_Pheno","EFI_U_P","VT_Ph_GDD",
                  "greenbears_stl","DALEC_SIP","PEG","Fourier","
                  Team_MODIS","greenbears","EFInull","UCSC_P_EDM","climatology")
 gccForecasts <- subset(gccForecastsALL,team %in% springTeams) #Subset to only include the teams that submitted spring forecasts and not the ones that joined for autumn 
+} else {
+  gccForecasts = df %>% rename(siteID = site)
+  gccForecasts$forecast_start_time = as.Date(gccForecasts$forecast_start_time)
+  gccForecasts = gccForecasts %>% rename(lower95 = quantile02.5,upper95 = quantile97.5,obs=observed)
 }
+
+## recode "greenbears" to "greenbears_gams" at teams suggestion
+gccForecasts$team[gccForecasts$team == "greenbears"] = "greenbears_gams"
 
 teams <- unique(gccForecasts$team)
 n_teams <- length(teams)
@@ -211,7 +218,7 @@ tranDates <- as.Date(unlist(allTransitions[,2]),origin=as.Date("2020-12-31"))
 tranDates <- c(tranDates,as.Date(unlist(allTransitions[,8]),origin=as.Date("2020-12-31")))
 challengeDays <- seq(as.Date("2021-02-01"),as.Date("2021-06-30"),"day")
 
-##jpeg(file="DatesOfForecastAndSubmissionFigure.jpg",width = 1000, height = 480, units = "px")#,height=3,width=10,units="inch",res=700)
+jpeg(file="DatesOfForecastAndSubmissionFigure.jpg",width = 1000, height = 480, units = "px")#,height=3,width=10,units="inch",res=700)
 
 par(mfrow=c(1,2),mai=c(1,2,0.3,0.1))
 
@@ -770,11 +777,12 @@ ggplot(alpha) + aes(x=team, y=Estimate,fill=site,) +
 ## Lead time
 hnew <- 1:35
 crps_horiz <- predict(fit2,data.frame(horizon=hnew,siteID="HARV",team="EFInull",phenoDate=0))
-plot(hnew,crps_horiz,xlab="Horizon",ylab="predicted CRPS")
+plot(hnew,crps_horiz,xlab="Horizon",ylab="predicted CRPS",type="l",lwd=3)
 
-pDnew <- -80:40
+## phenoDate
+pDnew2 <- -80:40
 crps_pD <- predict(fit2,data.frame(horizon=1,siteID="HARV",team="EFInull",phenoDate=pDnew))
-plot(pDnew,crps_pD,xlab="Days from 15%",ylab="predicted CRPS")
+plot(pDnew2,crps_pD,xlab="Days from 15%",ylab="predicted CRPS",lwd=3,type='l')
 abline(v=0,lty=2)
 print(paste("We are worst at predicting:",pDnew[which.max(crps_pD)],"days before 15% green-up"))
 
