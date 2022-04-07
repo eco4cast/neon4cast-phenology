@@ -134,7 +134,14 @@ springTeams <- c("PhenoPhriends", "PEG_RFR2","CU_Pheno","EFI_U_P","VT_Ph_GDD",
                  "greenbears_stl","DALEC_SIP","PEG","Fourier","
                  Team_MODIS","greenbears","EFInull","UCSC_P_EDM","climatology")
 gccForecasts <- subset(gccForecastsALL,team %in% springTeams) #Subset to only include the teams that submitted spring forecasts and not the ones that joined for autumn 
+} else {
+  gccForecasts = df %>% rename(siteID = site)
+  gccForecasts$forecast_start_time = as.Date(gccForecasts$forecast_start_time)
+  gccForecasts = gccForecasts %>% rename(lower95 = quantile02.5,upper95 = quantile97.5,obs=observed)
 }
+
+## recode "greenbears" to "greenbears_gams" at teams suggestion
+gccForecasts$team[gccForecasts$team == "greenbears"] = "greenbears_gams"
 
 teams <- unique(gccForecasts$team)
 n_teams <- length(teams)
@@ -211,7 +218,7 @@ tranDates <- as.Date(unlist(allTransitions[,2]),origin=as.Date("2020-12-31"))
 tranDates <- c(tranDates,as.Date(unlist(allTransitions[,8]),origin=as.Date("2020-12-31")))
 challengeDays <- seq(as.Date("2021-02-01"),as.Date("2021-06-30"),"day")
 
-##jpeg(file="DatesOfForecastAndSubmissionFigure.jpg",width = 1000, height = 480, units = "px")#,height=3,width=10,units="inch",res=700)
+jpeg(file="DatesOfForecastAndSubmissionFigure.jpg",width = 1000, height = 480, units = "px")#,height=3,width=10,units="inch",res=700)
 
 par(mfrow=c(1,2),mai=c(1,2,0.3,0.1))
 
@@ -704,14 +711,78 @@ fit2 <- mgcv::gam(crps ~ siteID + s(horizon) + team + s(phenoDate),
             data = gcc_forecast_subset2,
             method="REML")
 summary(fit2)
+fit2i <- mgcv::gam(crps ~ siteID  + team + siteID*team + s(horizon)+ s(phenoDate),
+            data = gcc_forecast_subset2,
+            method="REML")
+summary(fit2i)
 
+## team effect
+beta = summary(fit2)$p.table
+beta.team = as.data.frame(beta[grepl("team",row.names(beta)),]) %>% mutate(team=rownames(beta.team))
+colnames(beta.team)[2] <- "SE"
+ggplot(beta.team) + 
+  geom_bar( aes(x=team, y=Estimate), stat="identity", fill="skyblue", alpha=0.5) +
+  geom_errorbar( aes(x=team, ymin=Estimate-1.96*SE, ymax=Estimate+1.96*SE), width=0.4, colour="orange", alpha=0.9, size=1.3) +
+  coord_flip() + ylab("CRPS(model) - CRPS(clim)")
+
+## site effect
+beta.site = as.data.frame(rbind(beta[1,],beta[grepl("site",row.names(beta)),])) %>% mutate(site=rownames(beta.site))
+beta.site$site = gsub("siteID","",beta.site$site)
+beta.site$site[1]="BART"
+colnames(beta.site)[2] <- "SE"
+bcov = vcov(fit2)[1:8,1:8]
+beta.site$Estimate[2:8] = beta.site$Estimate[2:8] + beta.site$Estimate[1] ## rescale mean
+beta.site$SE[2:8] = sqrt(beta.site$SE[2:8]^2 + beta.site$SE[1]^2 + 2*bcov[2:8,1]) ## rescale SE
+ggplot(beta.site) + 
+  geom_bar( aes(x=site, y=Estimate), stat="identity", fill="skyblue", alpha=0.5) +
+  geom_errorbar( aes(x=site, ymin=Estimate-1.96*SE, ymax=Estimate+1.96*SE), width=0.4, colour="orange", alpha=0.9, size=1.3) +
+  coord_flip() + ylab("CRPS")
+
+## site by team interactions
+alpha = as.data.frame(summary(fit2i)$p.table) %>% mutate(lab = rownames(alpha)) %>% separate(lab,c("site","team"),sep = ":")  ## grab summary table
+#recode primary effects
+noteam <- which(is.na(alpha$team) & grepl("site",alpha$site))
+nosite <- which(is.na(alpha$team) & grepl("team",alpha$site))
+alpha$team[nosite] <- alpha$site[nosite]
+alpha$site[c(1,nosite)] <- "BART"
+alpha$team[c(1,noteam)] <- "climatology"
+alpha$site <- gsub("siteID","",alpha$site)
+alpha$team <- gsub("team","",alpha$team)
+colnames(alpha)[2] <- "SE"
+# add intercept to site effect
+alpha$Estimate[2:8] = alpha$Estimate[2:8] + alpha$Estimate[1] ## rescale mean
+alpha$SE[2:8] = sqrt(alpha$SE[2:8]^2 + alpha$SE[1]^2 + 2*vcov(fit2i)[2:8,1]) ## rescale SE
+# add site means to all other terms
+aS <- alpha[1:8,] %>%  select(Estimate:SE,site) %>% rename(Smu = Estimate,Sse=SE) ## pull out site effects
+alpha = alpha %>% left_join(aS,by="site") %>%  ## add site effects as column
+  mutate(Smu=if_else(team=="climatology",0,Smu),Sse=if_else(team=="climatology",0,Sse)) %>%  ## set default case to 0
+  mutate(Estimate = Estimate + Smu,SE = sqrt(SE^2 + Sse^2)) ##update stats
+## add team effect (ref site = BART) to all other terms
+aT <- alpha %>% filter(site == "BART") %>% rename(Tmu = Estimate,Tse=SE) %>%  
+  mutate(Tmu=if_else(team=="climatology",0,Tmu),Tse=if_else(team=="climatology",0,Tse)) %>% ## intercept
+  select(Tmu:Tse,team) 
+alpha = alpha %>% left_join(aT,by="team") %>%  ## add site effects as column
+  mutate(Tmu=if_else(site=="BART",0,Tmu),Tse=if_else(site=="BART",0,Tse)) %>%  ## set default case to 0
+  mutate(Estimate = Estimate + Tmu,SE = sqrt(SE^2 + Tse^2)) ##update stats
+colnames(alpha)[4] <- "pval"
+alpha = alpha %>% mutate(sig = as.numeric(pval < 0.05)) ## add significance test for visualization
+alpha$Estimate[alpha$Estimate<0] = 0 ## sanity check
+## visualize
+ggplot(alpha) + aes(x=team, y=Estimate,fill=site,) +
+  geom_bar(stat="identity",  alpha=alpha$sig+0.3, position = "dodge") + scale_alpha(range = c(0.1, 0.9)) +
+#  geom_errorbar( aes(x=team, ymin=Estimate-1.96*SE, ymax=Estimate+1.96*SE), width=0.4, colour="orange", alpha=0.9, position="dodge") +
+  coord_flip() + ylab("CRPS")
+
+
+## Lead time
 hnew <- 1:35
 crps_horiz <- predict(fit2,data.frame(horizon=hnew,siteID="HARV",team="EFInull",phenoDate=0))
-plot(hnew,crps_horiz,xlab="Horizon",ylab="predicted CRPS")
+plot(hnew,crps_horiz,xlab="Horizon",ylab="predicted CRPS",type="l",lwd=3)
 
-pDnew <- -80:40
+## phenoDate
+pDnew2 <- -80:40
 crps_pD <- predict(fit2,data.frame(horizon=1,siteID="HARV",team="EFInull",phenoDate=pDnew))
-plot(pDnew,crps_pD,xlab="Days from 15%",ylab="predicted CRPS")
+plot(pDnew2,crps_pD,xlab="Days from 15%",ylab="predicted CRPS",lwd=3,type='l')
 abline(v=0,lty=2)
 print(paste("We are worst at predicting:",pDnew[which.max(crps_pD)],"days before 15% green-up"))
 
@@ -752,6 +823,7 @@ plotPredictability(trans=0.15)
 plotPredictability(trans=0.50)
 plotPredictability(trans=0.85)
 ```
+
 
 
 *GAM: Horizon and phenoDate by team*
