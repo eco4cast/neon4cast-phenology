@@ -566,7 +566,13 @@ ggplot(d,aes(.r,as.numeric(as.character(forecastHorizon)),colour=site)) +
 
 ## metadata processing
 ```{r}
-## grab the names of all the EMLs
+meta_reload = FALSE
+if(meta_reload){
+## New version
+obj <- arrow::s3_bucket("forecasts/phenology", endpoint_override="data.ecoforecast.org")
+obj$ls()  
+  
+## OLD: grab the names of all the EMLs
 obj <- aws.s3::get_bucket("forecasts",
                                prefix = "phenology",
                                region = "data",
@@ -609,9 +615,21 @@ for(i in seq_along(toGrab)){
 }
 fname = c(fname,fname2)
 fname
+} else {
+  ## LOAD XML FILES LOCALLY
+  fname = dir(pattern = "[exy]ml")
+}
 
 lexists <- function(list,name){
-  name %in% names(list)
+  if(name %in% names(list)){
+    if(is.null(list[[name]])){
+      return(FALSE)
+    } else {
+      return(TRUE)
+    }
+  } else {
+    return(FALSE)
+  }
 }
 
 ## Things we want to pull out::
@@ -665,11 +683,11 @@ meta$initial_conditions[meta$initial_conditions == "absent"] = FALSE
 meta$initial_conditions[!is.na(meta$initial_conditions) & meta$initial_conditions != FALSE] = TRUE
 
 ## hacks
-meta[c("PEG","PEG_RFR2","greenbears_gams","greenbears_stl","VT_Ph_GDD"),"initial_conditions"] = FALSE
-meta[c("PEG_RFR","PEG_RFR0","DALEC_SIP","PhenoPhriends","EFInull"),"initial_conditions"] = TRUE
+meta[c("PEG","PEG_RFR2","greenbears_gams","greenbears_stl","VT_Ph_GDD","EFI_U_P","Fourier","Team_MODIS"),"initial_conditions"] = FALSE
+meta[c("PEG_RFR","PEG_RFR0","DALEC_SIP","PhenoPhriends","EFInull","CU_Pheno"),"initial_conditions"] = TRUE
 
-meta[c("PEG","greenbears_gams","greenbears_stl","EFInull"),"drivers"] = FALSE
-meta[c("PEG_RFR","PEG_RFR0","PEG_RFR2","DALEC_SIP","PhenoPhriends","greenbears_par","VT_Ph_GDD"),"drivers"] = TRUE
+meta[c("PEG","greenbears_gams","greenbears_stl","EFInull","Fourier"),"drivers"] = FALSE
+meta[c("PEG_RFR","PEG_RFR0","PEG_RFR2","DALEC_SIP","PhenoPhriends","greenbears_par","VT_Ph_GDD","EFI_U_P","Team_MODIS","CU_Pheno"),"drivers"] = TRUE
 
 meta["VT_Ph_GDD","type"] = "statistical"
 
@@ -687,6 +705,7 @@ Prep data
 ```{r, echo=FALSE}
 gcc_forecast_subset3 <- gcc_forecast_subset %>% left_join(y=meta,by = "team")
 
+table(gcc_forecast_subset3$class)
 
 matchSite <- match(gcc_forecast_subset$siteID, allTransitions$siteID)
 gcc_forecast_subset2 <- gcc_forecast_subset3 %>%
