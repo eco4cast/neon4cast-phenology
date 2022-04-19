@@ -137,6 +137,9 @@ if(FALSE){ ## OLD CODE
   gccForecasts$start_time = as.Date(gccForecasts$start_time)
   gccForecasts$horizon = gccForecasts$horizon/86400 ## convert from seconds to days
   gccForecasts = gccForecasts %>% rename(lower95 = quantile02.5,upper95 = quantile97.5,obs=observed)
+  
+  
+  submittedForecasts <- gccForecasts %>% rename(forecast_start_time = start_time) # used by calculatePhenoCamTransitionDates.R
 }
 
 ## recode "greenbears" to "greenbears_gams" at teams suggestion
@@ -630,7 +633,10 @@ lexists <- function(list,name){
     return(FALSE)
   }
 }
+```
 
+
+```{r}
 ## Things we want to pull out::
 ## model type
 ## for each uncertainty: status, complexity
@@ -742,16 +748,25 @@ beta.team = as.data.frame(beta[grepl("team",row.names(beta)),]) %>%
   mutate(team = sub("team","",rownames(.))) %>% left_join(y=meta,by="team") %>% arrange(Estimate)
 colnames(beta.team)[2] <- "SE"
 beta.team$team = reorder(beta.team$team,beta.team$Estimate)
+```
+```{r}
+as.tibble(beta.team)
+```
 
+```{r}
 ggplot(beta.team) + 
-  geom_bar( aes(x=team, y=Estimate), stat="identity",
-            fill=RColorBrewer::brewer.pal(4,"Dark2")[as.numeric(as.factor(beta.team$class))], 
+  geom_bar( aes(x=team, y=Estimate, fill=class),
+            stat="identity",
             alpha=0.75) +
  geom_errorbar( aes(x=team, ymin=Estimate-1.96*SE, ymax=Estimate+1.96*SE), width=0.4, colour="orange", alpha=0.9, size=1.3) +
   coord_flip() + ylab("CRPS(model) - CRPS(clim)") +
-  theme(legend.position = c(0.8, 0.2))
-## TODO: legend, put in multi-panel
+  theme(legend.position = c(0.8, 0.2)) +
+  scale_fill_brewer(palette="Dark2")
 
+## TODO: legend, put in multi-panel
+```
+
+```{r}
 ## site effect
 beta.site = as.data.frame(rbind(beta[1,],beta[grepl("site",row.names(beta)),])) %>% mutate(site=rownames(.)) 
 beta.site$site = gsub("siteID","",beta.site$site)
