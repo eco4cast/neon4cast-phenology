@@ -749,9 +749,7 @@ beta.team = as.data.frame(beta[grepl("team",row.names(beta)),]) %>%
 colnames(beta.team)[2] <- "SE"
 beta.team$team = reorder(beta.team$team,beta.team$Estimate)
 ```
-```{r}
-as.tibble(beta.team)
-```
+
 
 ```{r}
 ggplot(beta.team) + 
