@@ -108,9 +108,8 @@ s3 <- arrow::s3_bucket(bucket = "scores/parquet",
                         endpoint_override = "data.ecoforecast.org",
                         anonymous=TRUE)
 ds <- arrow::open_dataset(s3, partition="theme")
-df <- ds %>% filter(theme == "phenology", variable=="gcc_90",
-                      start_time < lubridate::as_date("2021-06-30")) %>% collect()
-
+df <- ds %>% filter(theme == "phenology", variable=="gcc_90") %>% collect() ## filtering by start_time within arrow stopped working
+df <- df %>% filter(start_time < lubridate::as_date("2021-06-30"))
 
 if(FALSE){ ## OLD CODE
   ## grab and load forecasts
@@ -739,28 +738,46 @@ summary(fit2i)
 
 ## team effect
 beta = summary(fit2)$p.table
-beta.team = as.data.frame(beta[grepl("team",row.names(beta)),]) %>% mutate(team=rownames(beta.team))
+beta.team = as.data.frame(beta[grepl("team",row.names(beta)),]) %>% 
+  mutate(team = sub("team","",rownames(.))) %>% left_join(y=meta,by="team") %>% arrange(Estimate)
 colnames(beta.team)[2] <- "SE"
+beta.team$team = reorder(beta.team$team,beta.team$Estimate)
+
 ggplot(beta.team) + 
-  geom_bar( aes(x=team, y=Estimate), stat="identity", fill="skyblue", alpha=0.5) +
-  geom_errorbar( aes(x=team, ymin=Estimate-1.96*SE, ymax=Estimate+1.96*SE), width=0.4, colour="orange", alpha=0.9, size=1.3) +
-  coord_flip() + ylab("CRPS(model) - CRPS(clim)")
+  geom_bar( aes(x=team, y=Estimate), stat="identity",
+            fill=RColorBrewer::brewer.pal(4,"Dark2")[as.numeric(as.factor(beta.team$class))], 
+            alpha=0.75) +
+ geom_errorbar( aes(x=team, ymin=Estimate-1.96*SE, ymax=Estimate+1.96*SE), width=0.4, colour="orange", alpha=0.9, size=1.3) +
+  coord_flip() + ylab("CRPS(model) - CRPS(clim)") +
+  theme(legend.position = c(0.8, 0.2))
+## TODO: legend, put in multi-panel
 
 ## site effect
-beta.site = as.data.frame(rbind(beta[1,],beta[grepl("site",row.names(beta)),])) %>% mutate(site=rownames(beta.site))
+beta.site = as.data.frame(rbind(beta[1,],beta[grepl("site",row.names(beta)),])) %>% mutate(site=rownames(.)) 
 beta.site$site = gsub("siteID","",beta.site$site)
 beta.site$site[1]="BART"
 colnames(beta.site)[2] <- "SE"
 bcov = vcov(fit2)[1:8,1:8]
 beta.site$Estimate[2:8] = beta.site$Estimate[2:8] + beta.site$Estimate[1] ## rescale mean
 beta.site$SE[2:8] = sqrt(beta.site$SE[2:8]^2 + beta.site$SE[1]^2 + 2*bcov[2:8,1]) ## rescale SE
+beta.site = beta.site %>% left_join(y=allTransitions,by=c("site"="siteID")) %>% arrange(day50)
+
+siteLM = lm(Estimate ~ day50,beta.site)
+plot(beta.site$day50,beta.site$Estimate)
+abline(siteLM)
+summary(siteLM)
+
+beta.site$site = reorder(beta.site$site,beta.site$day50)
+
 ggplot(beta.site) + 
   geom_bar( aes(x=site, y=Estimate), stat="identity", fill="skyblue", alpha=0.5) +
   geom_errorbar( aes(x=site, ymin=Estimate-1.96*SE, ymax=Estimate+1.96*SE), width=0.4, colour="orange", alpha=0.9, size=1.3) +
   coord_flip() + ylab("CRPS")
+## TODO: RUN LM vs LAT; ORDER BY LAT OR GREENUP DATE (whichever is more significant), put in multi-panel; Color = usage elsewhere
+
 
 ## site by team interactions
-alpha = as.data.frame(summary(fit2i)$p.table) %>% mutate(lab = rownames(alpha)) %>% separate(lab,c("site","team"),sep = ":")  ## grab summary table
+alpha = as.data.frame(summary(fit2i)$p.table) %>% mutate(lab = rownames(.)) %>% separate(lab,c("site","team"),sep = ":")  ## grab summary table
 #recode primary effects
 noteam <- which(is.na(alpha$team) & grepl("site",alpha$site))
 nosite <- which(is.na(alpha$team) & grepl("team",alpha$site))
@@ -789,23 +806,23 @@ colnames(alpha)[4] <- "pval"
 alpha = alpha %>% mutate(sig = as.numeric(pval < 0.05)) ## add significance test for visualization
 alpha$Estimate[alpha$Estimate<0] = 0 ## sanity check
 ## visualize
-ggplot(alpha) + aes(x=team, y=Estimate,fill=site,) +
+ggplot(alpha) + aes(x=team, y=Estimate,fill=site) +
   geom_bar(stat="identity",  alpha=alpha$sig+0.3, position = "dodge") + scale_alpha(range = c(0.1, 0.9)) +
 #  geom_errorbar( aes(x=team, ymin=Estimate-1.96*SE, ymax=Estimate+1.96*SE), width=0.4, colour="orange", alpha=0.9, position="dodge") +
   coord_flip() + ylab("CRPS")
+## TODO: consistent site color scheme
 
-
-## Lead time
+## Lead time plots
 hnew <- 1:35
 crps_horiz <- predict(fit2,data.frame(horizon=hnew,siteID="HARV",team="EFInull",phenoDate=0))
 plot(hnew,crps_horiz,xlab="Horizon",ylab="predicted CRPS",type="l",lwd=3)
 
 ## phenoDate
 pDnew2 <- -80:40
-crps_pD <- predict(fit2,data.frame(horizon=1,siteID="HARV",team="EFInull",phenoDate=pDnew))
+crps_pD <- predict(fit2,data.frame(horizon=1,siteID="HARV",team="EFInull",phenoDate=pDnew2))
 plot(pDnew2,crps_pD,xlab="Days from 15%",ylab="predicted CRPS",lwd=3,type='l')
 abline(v=0,lty=2)
-print(paste("We are worst at predicting:",pDnew[which.max(crps_pD)],"days before 15% green-up"))
+print(paste("We are worst at predicting:",pDnew2[which.max(crps_pD)],"days before 15% green-up"))
 
 plotPredictability <- function(trans){
   matchSite <- match(gcc_forecast_subset$siteID, allTransitions$siteID)
@@ -989,7 +1006,7 @@ lapply(fit4,summary)
 
 plots
 ```{r,echo=FALSE}
-mname = c("clim","covariate","NA","dynamic","persist","static")
+mname = c("dynamic","persist","clim","covariate","static")
 
 ## horizon plot
 hnew <- 1:35
@@ -1006,7 +1023,7 @@ plot(hnew,crps_horiz5a,xlab="Lead Time",ylab="predicted CRPS",
 for(i in seq_along(mtype)){
     lines(hnew,crps_horiz4[[i]],col=cls[i],lwd=3)
 }
-legend("topleft",col=cls[seq_along(mtype)],lwd = 2, lty=1, legend = mname,cex=0.5,ncol=3)
+legend("topleft",col=cls[seq_along(mtype)],lwd = 3, lty=1, legend = mname,cex=0.75,ncol=3)
 
 #HORIZON: Relative error
 plot(hnew,crps_horiz5a/crps_horiz5a[1],xlab="Lead Time",ylab="relative CRPS",
@@ -1016,7 +1033,7 @@ for(i in seq_along(mtype)){
   y = crps_horiz4[[i]]
   lines(hnew,y/y[1],col=cls[i],lwd=3)
 }
-legend("topleft",col=cls[seq_along(mtype)],lwd = 2, lty=1, legend = mname,cex=0.5,ncol=3)
+legend("topleft",col=cls[seq_along(mtype)],lwd = 3, lty=1, legend = mname,cex=0.75,ncol=3)
 
 #HORIZON: delCRPS
 plot(hnew,crps_horiz5a-crps_horiz5a[1],xlab="Lead Time",ylab="delCRPS",
@@ -1025,7 +1042,7 @@ for(i in seq_along(mtype)){
   y = crps_horiz4[[i]]
   lines(hnew,y-y[1],col=cls[i],lwd=3)
 }
-legend("topleft",col=cls[seq_along(mtype)],lwd = 2, lty=1, legend = mname,cex=0.5,ncol=3)
+legend("topleft",col=cls[seq_along(mtype)],lwd = 3, lty=1, legend = mname,cex=0.75,ncol=3)
 
 ## phenoDate plot
 pD_mtype <- gcc_forecast_subset2 %>%  group_by(class) %>%
@@ -1054,10 +1071,60 @@ for(i in seq_along(mtype)){
     lines(pDnew4[[i]],y-y[1],col=cls[i],lwd=3)
 }
 abline(v=0,lty=2)
-legend("topleft",col=cls[seq_along(mtype)],lwd = 2, lty=1, legend = mname,cex=0.5,ncol=3)
+legend("topleft",col=cls[seq_along(mtype)],lwd = 3, lty=1, legend = mname,cex=0.75,ncol=3)
 
 
 
+
+```
+
+
+
+# organize figures into multipanel plots
+
+### LEAD TIME
+
+```{r}
+par(mfrow=c(4,1))
+## OVERALL
+plot(hnew,crps_horiz,xlab="Horizon",ylab="predicted CRPS",type="l",lwd=3)
+
+## MODEL TYPE: CRPS
+plot(hnew,crps_horiz5a,xlab="Lead Time",ylab="predicted CRPS",
+     ylim=h4range,type='l',lwd=1,lty=2)
+for(i in seq_along(mtype)){
+    lines(hnew,crps_horiz4[[i]],col=cls[i],lwd=3)
+}
+legend("topleft",col=cls[seq_along(mtype)],lwd = 3, lty=1, legend = mname,cex=0.75,ncol=3)
+
+
+#MODEL TYPE: delCRPS
+plot(hnew,crps_horiz5a-crps_horiz5a[1],xlab="Lead Time",ylab="delCRPS",
+     ylim=c(-0.005,0.025),type='l',lwd=1,lty=2)
+for(i in seq_along(mtype)){
+  y = crps_horiz4[[i]]
+  lines(hnew,y-y[1],col=cls[i],lwd=3)
+}
+legend("topleft",col=cls[seq_along(mtype)],lwd = 3, lty=1, legend = mname,cex=0.75,ncol=3)
+
+
+## MODEL
+# plot(hnew,crps_horiz5a,xlab="Lead Time",ylab="predicted CRPS",
+#      ylim=h5range,type='l',lwd=1,lty=2)
+# for(i in seq_along(toPlot5)){
+#   y = crps_horiz5[[toPlot5[i]]]
+#   lines(hnew,y,col=cls[i],lwd=3)
+# }
+# legend("topleft",col=cls,lwd = 2, lty=1, legend = teams[toPlot5],cex=0.5,ncol=3)
+
+#MODEL: delCRPS
+plot(hnew,crps_horiz5a-crps_horiz5a[1],xlab="Lead Time",ylab="delCRPS",
+     ylim=c(-0.005,0.025),type='l',lwd=1,lty=2)
+for(i in seq_along(toPlot5)){
+  y = crps_horiz5[[toPlot5[i]]]
+  lines(hnew,y-y[1],col=cls[i],lwd=3)
+}
+legend("topleft",col=cls,lwd = 2, lty=1, legend = teams[toPlot5],cex=0.5,ncol=3)
 
 ```
 
