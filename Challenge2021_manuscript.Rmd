@@ -49,9 +49,9 @@ multi_team_plot <- function(combined_forecasts, target, theme, date, horizon, si
     dplyr::filter(target == target_variable,
                   siteID %in% siteID_subset,
                   team %in% team_subset,
-                  lubridate::as_date(forecast_start_time) %in% lubridate::as_date(date))
+                  lubridate::as_date(start_time) %in% lubridate::as_date(date))
   
-  combined_forecasts$max_date <- combined_forecasts$forecast_start_time + lubridate::days(horizon)
+  combined_forecasts$max_date <- combined_forecasts$start_time + lubridate::days(horizon)
   
   combined_forecasts <- combined_forecasts %>%
     dplyr::mutate(max_date = ifelse(time <= max_date, 1, 0)) %>%
@@ -60,7 +60,7 @@ multi_team_plot <- function(combined_forecasts, target, theme, date, horizon, si
   if(theme != "terrestrial_30min"){
     combined_forecasts <- combined_forecasts %>%
       mutate(time = lubridate::as_date(time),
-             forecast_start_time = lubridate::as_date(forecast_start_time))
+             start_time = lubridate::as_date(start_time))
   }
   
   p <- combined_forecasts %>%
@@ -83,11 +83,11 @@ multi_team_plot <- function(combined_forecasts, target, theme, date, horizon, si
   
   if(length(date) > 1  & length(siteID_subset) > 1){
     
-    p + facet_grid(rows = vars(forecast_start_time), cols = vars(siteID))
+    p + facet_grid(rows = vars(start_time), cols = vars(siteID))
     
   }else if(length(date) > 1  & length(siteID_subset) == 1){
     
-    p + facet_wrap(vars(forecast_start_time)) + labs(title = siteID)
+    p + facet_wrap(vars(start_time)) + labs(title = siteID)
     
   }else if(length(date) == 1  & length(siteID_subset) > 1){
     
@@ -104,40 +104,42 @@ multi_team_plot <- function(combined_forecasts, target, theme, date, horizon, si
 ```{r,echo=FALSE}
 ## grab and load forecast (updated based on Slack code snippet from Quinn)
 #remotes::install_github("eco4cast/neon4cast")
-s <- neon4cast::score_schema() 
-s3 <- arrow::s3_bucket(bucket = "scores",
-                         endpoint_override = "data.ecoforecast.org",
-                         anonymous=TRUE)
-ds <- arrow::open_dataset(s3, schema=s, format = "csv", skip_rows = 1)
-df <- ds %>% filter(theme == "phenology", target=="gcc_90",
-                      forecast_start_time < lubridate::as_date("2021-06-30")) %>% collect()
+s3 <- arrow::s3_bucket(bucket = "scores/parquet",
+                        endpoint_override = "data.ecoforecast.org",
+                        anonymous=TRUE)
+ds <- arrow::open_dataset(s3, partition="theme")
+df <- ds %>% filter(theme == "phenology", variable=="gcc_90") %>% collect() ## filtering by start_time within arrow stopped working
+df <- df %>% filter(start_time < lubridate::as_date("2021-06-30"))
 
-## OLD CODE
-if(FALSE){
-## grab and load forecasts
-filename = "combined_forecasts_scores.csv.gz"  ## file is updated daily, but right now you need to delete this file to force the system to re-down it
-if(!file.exists(filename)){
-  object <- aws.s3::get_bucket("analysis", 
-                               prefix = filename,
-                               region = "data",
-                               base_url = "ecoforecast.org")
-  aws.s3::save_object(object[[1]], 
+if(FALSE){ ## OLD CODE
+  ## grab and load forecasts
+  filename = "combined_forecasts_scores.csv.gz"  ## file is updated daily, but right now you need to delete this file to force the system to re-down it
+  if(!file.exists(filename)){
+    object <- aws.s3::get_bucket("analysis", 
+                                 prefix = filename,
+                                 region = "data",
+                                 base_url = "ecoforecast.org")
+    aws.s3::save_object(object[[1]], 
                         bucket = "analysis", 
                         file = filename,
                         region = "data",
                         base_url = "ecoforecast.org")
-}
-submittedForecasts <- readr::read_csv(filename, col_names = TRUE)
-gccForecastsALL <- subset(submittedForecasts, target == "gcc_90")
-springTeams <- c("PhenoPhriends", "PEG_RFR2","CU_Pheno","EFI_U_P","VT_Ph_GDD",
-                 "CSP_Gwave","greenbears_par","PEG_RFR0","PEG_RFR","greenbears_gams",
-                 "greenbears_stl","DALEC_SIP","PEG","Fourier","
+  }
+  submittedForecasts <- readr::read_csv(filename, col_names = TRUE)
+  gccForecastsALL <- subset(submittedForecasts, target == "gcc_90")
+  springTeams <- c("PhenoPhriends", "PEG_RFR2","CU_Pheno","EFI_U_P","VT_Ph_GDD",
+                   "CSP_Gwave","greenbears_par","PEG_RFR0","PEG_RFR","greenbears_gams",
+                   "greenbears_stl","DALEC_SIP","PEG","Fourier","
                  Team_MODIS","greenbears","EFInull","UCSC_P_EDM","climatology")
-gccForecasts <- subset(gccForecastsALL,team %in% springTeams) #Subset to only include the teams that submitted spring forecasts and not the ones that joined for autumn 
-} else {
-  gccForecasts = df %>% rename(siteID = site)
-  gccForecasts$forecast_start_time = as.Date(gccForecasts$forecast_start_time)
+  gccForecasts <- subset(gccForecastsALL,team %in% springTeams) #Subset to only include the teams that submitted spring forecasts and not the ones that joined for autumn 
+} else { ## NEW CODE 
+  gccForecasts = df %>% rename(siteID = site_id, team = model_id)  ## undoing some standard names for backward compatibility
+  gccForecasts$start_time = as.Date(gccForecasts$start_time)
+  gccForecasts$horizon = gccForecasts$horizon/86400 ## convert from seconds to days
   gccForecasts = gccForecasts %>% rename(lower95 = quantile02.5,upper95 = quantile97.5,obs=observed)
+  
+  
+  submittedForecasts <- gccForecasts %>% rename(forecast_start_time = start_time) # used by calculatePhenoCamTransitionDates.R
 }
 
 ## recode "greenbears" to "greenbears_gams" at teams suggestion
@@ -160,7 +162,7 @@ ggplot(data = gccForecasts) +
   ## xlim(c(0, 30))
 
 ggplot(data = gccForecasts) + 
-  geom_histogram(aes(forecast_start_time, fill = team), bins = 100) +
+  geom_histogram(aes(start_time, fill = team), bins = 100) +
   xlim(lubridate::ymd(c('2021-01-01', '2021-07-01')))
 
 summary(gccForecasts)
@@ -168,8 +170,8 @@ summary(gccForecasts)
 gcc_forecast_subset <- gccForecasts %>% 
   dplyr::filter(!is.na(mean) & 
                   horizon >= 1 & horizon <= 35 &
-                  forecast_start_time >= lubridate::ymd("2021-02-01") & 
-                  forecast_start_time <= lubridate::ymd("2021-06-01"))
+                  start_time >= lubridate::ymd("2021-02-01") & 
+                  start_time <= lubridate::ymd("2021-06-01"))
 
 gcc_forecast_subset %>%
   dplyr::group_by(team) %>% 
@@ -178,10 +180,10 @@ gcc_forecast_subset %>%
   ggplot() + geom_point(aes(team, n)) + coord_flip() + theme_bw() + scale_y_log10()
 
 gcc_forecast_subset %>%
-  group_by(forecast_start_time) %>% 
+  group_by(start_time) %>% 
   summarize(n = n()) %>% 
   dplyr::arrange(n) %>% 
-  ggplot() + geom_point(aes(forecast_start_time, n)) + theme_bw()
+  ggplot() + geom_point(aes(start_time, n)) + theme_bw()
 ```
 
 Prep:
@@ -252,7 +254,7 @@ gccForecastsYes <- data.frame(matrix(ncol=n_teams,nrow=length(challengeDays)))
 for(tm in 1:n_teams){
   tmDat <- gccForecasts[gccForecasts$team==teams[tm],] #Subset by team
   tmSitDat <- tmDat[tmDat$siteID==site_names[s],] #Subset by site
-  uniqueTimes <- unique(as.Date(tmSitDat$forecast_start_time))
+  uniqueTimes <- unique(as.Date(tmSitDat$start_time))
   for(d in 1:length(challengeDays)){
     gccForecastsYes[d,tm] <- challengeDays[d] %in% uniqueTimes
   }
@@ -292,10 +294,10 @@ startDate <- challengeDays[as.numeric(names(which.max(submitted)))]
 
 ## grab and organize forecasts
 HF <- subset(gccForecasts, siteID == site_names[s])
-submissions <- tapply(HF$team,INDEX = HF$forecast_start_time,function(x){length(unique(x))})
-plot(as.Date(names(submissions)),submissions,xlab="Forecast Start Time")
+submissions <- tapply(HF$team,INDEX = HF$start_time,function(x){length(unique(x))})
+plot(as.Date(names(submissions),format = "%Y-%m-%d"),submissions,xlab="Forecast Start Time")
 
-ts <- subset(gccForecasts, forecast_start_time == startDate & siteID == site_names[s])
+ts <- subset(gccForecasts, start_time == startDate & siteID == site_names[s])
 
 ts.teams <- unique(ts$team)
 
@@ -406,7 +408,7 @@ plotStatisticsOverTime <- function(highlightTms = NA, statistic, ylim = c(0, 1),
           }
         }
         
-        lines(tranDate-as.Date(organizedDat$forecast_start_time),computedStat,col=scales::alpha(cls[cl],tF),lwd=lwdVl)
+        lines(tranDate-as.Date(organizedDat$start_time),computedStat,col=scales::alpha(cls[cl],tF),lwd=lwdVl)
         cl <- cl + 1
       }
     }
@@ -467,7 +469,7 @@ plotForecastedValuesOverTime <- function(s){
           rescaledDat[j] <- max(rescaledDat[j],0)
         }
         for(d in 1:length(beforeDays)){ #Not all teams submitted forecasts for all 35 forecast horizons 
-          replacement <- rescaledDat[organizedDat$forecast_start_time==beforeDays[d]]
+          replacement <- rescaledDat[organizedDat$start_time==beforeDays[d]]
           if(length(replacement)==0){
             if(d>1){
               if(!is.na(allPlottedData[s,(d-1)])){
@@ -519,8 +521,8 @@ for(s in 1:length(site_names)){
       tmSitDat <- sitDat[sitDat$team==teams[tm],] #Subset by team
       tm_tranDat <- tmSitDat[as.Date(tmSitDat$time)==tranDate,]
       if(nrow(tm_tranDat)>0){
-        mergedDat <- merge(tm_tranDat,clim_tranDat,'forecast_start_time')
-        forecastHorizon <- as.numeric(tranDate-mergedDat$forecast_start_time[which(mergedDat$crps.x<=mergedDat$crps.y)[1]])
+        mergedDat <- merge(tm_tranDat,clim_tranDat,'start_time')
+        forecastHorizon <- as.numeric(tranDate-mergedDat$start_time[which(mergedDat$crps.x<=mergedDat$crps.y)[1]])
         if(length(forecastHorizon)==0 | is.na(forecastHorizon)){
           forecastHorizon <- 0
         }
@@ -566,7 +568,13 @@ ggplot(d,aes(.r,as.numeric(as.character(forecastHorizon)),colour=site)) +
 
 ## metadata processing
 ```{r}
-## grab the names of all the EMLs
+meta_reload = FALSE
+if(meta_reload){
+## New version
+obj <- arrow::s3_bucket("forecasts/phenology", endpoint_override="data.ecoforecast.org")
+obj$ls()  
+  
+## OLD: grab the names of all the EMLs
 obj <- aws.s3::get_bucket("forecasts",
                                prefix = "phenology",
                                region = "data",
@@ -609,11 +617,26 @@ for(i in seq_along(toGrab)){
 }
 fname = c(fname,fname2)
 fname
-
-lexists <- function(list,name){
-  name %in% names(list)
+} else {
+  ## LOAD XML FILES LOCALLY
+  fname = dir(pattern = "[exy]ml")
 }
 
+lexists <- function(list,name){
+  if(name %in% names(list)){
+    if(is.null(list[[name]])){
+      return(FALSE)
+    } else {
+      return(TRUE)
+    }
+  } else {
+    return(FALSE)
+  }
+}
+```
+
+
+```{r}
 ## Things we want to pull out::
 ## model type
 ## for each uncertainty: status, complexity
@@ -665,11 +688,13 @@ meta$initial_conditions[meta$initial_conditions == "absent"] = FALSE
 meta$initial_conditions[!is.na(meta$initial_conditions) & meta$initial_conditions != FALSE] = TRUE
 
 ## hacks
-meta[c("PEG","PEG_RFR2","greenbears_gams","greenbears_stl"),"initial_conditions"] = FALSE
-meta[c("PEG_RFR","PEG_RFR0","DALEC_SIP","PhenoPhriends","EFInull"),"initial_conditions"] = TRUE
+meta[c("PEG","PEG_RFR2","greenbears_gams","greenbears_stl","VT_Ph_GDD","EFI_U_P","Fourier","Team_MODIS"),"initial_conditions"] = FALSE
+meta[c("PEG_RFR","PEG_RFR0","DALEC_SIP","PhenoPhriends","EFInull","CU_Pheno"),"initial_conditions"] = TRUE
 
-meta[c("PEG","greenbears_gams","greenbears_stl","EFInull"),"drivers"] = FALSE
-meta[c("PEG_RFR","PEG_RFR0","PEG_RFR2","DALEC_SIP","PhenoPhriends","greenbears_par"),"drivers"] = TRUE
+meta[c("PEG","greenbears_gams","greenbears_stl","EFInull","Fourier"),"drivers"] = FALSE
+meta[c("PEG_RFR","PEG_RFR0","PEG_RFR2","DALEC_SIP","PhenoPhriends","greenbears_par","VT_Ph_GDD","EFI_U_P","Team_MODIS","CU_Pheno"),"drivers"] = TRUE
+
+meta["VT_Ph_GDD","type"] = "statistical"
 
 meta$class <- paste0(meta$drivers,meta$initial_conditions)
 meta$team <- rownames(meta)
@@ -685,13 +710,14 @@ Prep data
 ```{r, echo=FALSE}
 gcc_forecast_subset3 <- gcc_forecast_subset %>% left_join(y=meta,by = "team")
 
+table(gcc_forecast_subset3$class)
 
 matchSite <- match(gcc_forecast_subset$siteID, allTransitions$siteID)
 gcc_forecast_subset2 <- gcc_forecast_subset3 %>%
   mutate(day85 = allTransitions$day85[matchSite],
          day50 = allTransitions$day50[matchSite],
          day15 = allTransitions$day15[matchSite],
-         phenoDate = lubridate::yday(forecast_start_time) - day15)
+         phenoDate = lubridate::yday(start_time) - day15)
 #phenoDate is the number of days after the 15% green-up date
 ```
 
@@ -718,28 +744,53 @@ summary(fit2i)
 
 ## team effect
 beta = summary(fit2)$p.table
-beta.team = as.data.frame(beta[grepl("team",row.names(beta)),]) %>% mutate(team=rownames(beta.team))
+beta.team = as.data.frame(beta[grepl("team",row.names(beta)),]) %>% 
+  mutate(team = sub("team","",rownames(.))) %>% left_join(y=meta,by="team") %>% arrange(Estimate)
 colnames(beta.team)[2] <- "SE"
-ggplot(beta.team) + 
-  geom_bar( aes(x=team, y=Estimate), stat="identity", fill="skyblue", alpha=0.5) +
-  geom_errorbar( aes(x=team, ymin=Estimate-1.96*SE, ymax=Estimate+1.96*SE), width=0.4, colour="orange", alpha=0.9, size=1.3) +
-  coord_flip() + ylab("CRPS(model) - CRPS(clim)")
+beta.team$team = reorder(beta.team$team,beta.team$Estimate)
+```
 
+
+```{r}
+ggplot(beta.team) + 
+  geom_bar( aes(x=team, y=Estimate, fill=class),
+            stat="identity",
+            alpha=0.75) +
+ geom_errorbar( aes(x=team, ymin=Estimate-1.96*SE, ymax=Estimate+1.96*SE), width=0.4, colour="orange", alpha=0.9, size=1.3) +
+  coord_flip() + ylab("CRPS(model) - CRPS(clim)") +
+  theme(legend.position = c(0.8, 0.2)) +
+  scale_fill_brewer(palette="Dark2")
+
+## TODO: legend, put in multi-panel
+```
+
+```{r}
 ## site effect
-beta.site = as.data.frame(rbind(beta[1,],beta[grepl("site",row.names(beta)),])) %>% mutate(site=rownames(beta.site))
+beta.site = as.data.frame(rbind(beta[1,],beta[grepl("site",row.names(beta)),])) %>% mutate(site=rownames(.)) 
 beta.site$site = gsub("siteID","",beta.site$site)
 beta.site$site[1]="BART"
 colnames(beta.site)[2] <- "SE"
 bcov = vcov(fit2)[1:8,1:8]
 beta.site$Estimate[2:8] = beta.site$Estimate[2:8] + beta.site$Estimate[1] ## rescale mean
 beta.site$SE[2:8] = sqrt(beta.site$SE[2:8]^2 + beta.site$SE[1]^2 + 2*bcov[2:8,1]) ## rescale SE
+beta.site = beta.site %>% left_join(y=allTransitions,by=c("site"="siteID")) %>% arrange(day50)
+
+siteLM = lm(Estimate ~ day50,beta.site)
+plot(beta.site$day50,beta.site$Estimate)
+abline(siteLM)
+summary(siteLM)
+
+beta.site$site = reorder(beta.site$site,beta.site$day50)
+
 ggplot(beta.site) + 
   geom_bar( aes(x=site, y=Estimate), stat="identity", fill="skyblue", alpha=0.5) +
   geom_errorbar( aes(x=site, ymin=Estimate-1.96*SE, ymax=Estimate+1.96*SE), width=0.4, colour="orange", alpha=0.9, size=1.3) +
   coord_flip() + ylab("CRPS")
+## TODO: RUN LM vs LAT; ORDER BY LAT OR GREENUP DATE (whichever is more significant), put in multi-panel; Color = usage elsewhere
+
 
 ## site by team interactions
-alpha = as.data.frame(summary(fit2i)$p.table) %>% mutate(lab = rownames(alpha)) %>% separate(lab,c("site","team"),sep = ":")  ## grab summary table
+alpha = as.data.frame(summary(fit2i)$p.table) %>% mutate(lab = rownames(.)) %>% separate(lab,c("site","team"),sep = ":")  ## grab summary table
 #recode primary effects
 noteam <- which(is.na(alpha$team) & grepl("site",alpha$site))
 nosite <- which(is.na(alpha$team) & grepl("team",alpha$site))
@@ -768,23 +819,23 @@ colnames(alpha)[4] <- "pval"
 alpha = alpha %>% mutate(sig = as.numeric(pval < 0.05)) ## add significance test for visualization
 alpha$Estimate[alpha$Estimate<0] = 0 ## sanity check
 ## visualize
-ggplot(alpha) + aes(x=team, y=Estimate,fill=site,) +
+ggplot(alpha) + aes(x=team, y=Estimate,fill=site) +
   geom_bar(stat="identity",  alpha=alpha$sig+0.3, position = "dodge") + scale_alpha(range = c(0.1, 0.9)) +
 #  geom_errorbar( aes(x=team, ymin=Estimate-1.96*SE, ymax=Estimate+1.96*SE), width=0.4, colour="orange", alpha=0.9, position="dodge") +
   coord_flip() + ylab("CRPS")
+## TODO: consistent site color scheme
 
-
-## Lead time
+## Lead time plots
 hnew <- 1:35
 crps_horiz <- predict(fit2,data.frame(horizon=hnew,siteID="HARV",team="EFInull",phenoDate=0))
 plot(hnew,crps_horiz,xlab="Horizon",ylab="predicted CRPS",type="l",lwd=3)
 
 ## phenoDate
 pDnew2 <- -80:40
-crps_pD <- predict(fit2,data.frame(horizon=1,siteID="HARV",team="EFInull",phenoDate=pDnew))
+crps_pD <- predict(fit2,data.frame(horizon=1,siteID="HARV",team="EFInull",phenoDate=pDnew2))
 plot(pDnew2,crps_pD,xlab="Days from 15%",ylab="predicted CRPS",lwd=3,type='l')
 abline(v=0,lty=2)
-print(paste("We are worst at predicting:",pDnew[which.max(crps_pD)],"days before 15% green-up"))
+print(paste("We are worst at predicting:",pDnew2[which.max(crps_pD)],"days before 15% green-up"))
 
 plotPredictability <- function(trans){
   matchSite <- match(gcc_forecast_subset$siteID, allTransitions$siteID)
@@ -793,19 +844,19 @@ plotPredictability <- function(trans){
       mutate(day85 = allTransitions$day85[matchSite],
              day50 = allTransitions$day50[matchSite],
              day15 = allTransitions$day15[matchSite],
-             phenoDate = lubridate::yday(forecast_start_time) - day50)
+             phenoDate = lubridate::yday(start_time) - day50)
   }else if(trans==0.15){
     gcc_forecast_subset2 <- gcc_forecast_subset %>% 
       mutate(day85 = allTransitions$day85[matchSite],
              day50 = allTransitions$day50[matchSite],
              day15 = allTransitions$day15[matchSite],
-             phenoDate = lubridate::yday(forecast_start_time) - day15)
+             phenoDate = lubridate::yday(start_time) - day15)
   }else if(trans==0.85){
     gcc_forecast_subset2 <- gcc_forecast_subset %>% 
       mutate(day85 = allTransitions$day85[matchSite],
              day50 = allTransitions$day50[matchSite],
              day15 = allTransitions$day15[matchSite],
-             phenoDate = lubridate::yday(forecast_start_time) - day85)
+             phenoDate = lubridate::yday(start_time) - day85)
   }
   fit <- gam(crps ~ siteID + s(horizon) + team + s(phenoDate), 
              data = gcc_forecast_subset2,
@@ -968,7 +1019,7 @@ lapply(fit4,summary)
 
 plots
 ```{r,echo=FALSE}
-mname = c("clim","covariate","NA","dynamic","persist","static")
+mname = c("dynamic","persist","clim","covariate","static")
 
 ## horizon plot
 hnew <- 1:35
@@ -985,7 +1036,7 @@ plot(hnew,crps_horiz5a,xlab="Lead Time",ylab="predicted CRPS",
 for(i in seq_along(mtype)){
     lines(hnew,crps_horiz4[[i]],col=cls[i],lwd=3)
 }
-legend("topleft",col=cls[seq_along(mtype)],lwd = 2, lty=1, legend = mname,cex=0.5,ncol=3)
+legend("topleft",col=cls[seq_along(mtype)],lwd = 3, lty=1, legend = mname,cex=0.75,ncol=3)
 
 #HORIZON: Relative error
 plot(hnew,crps_horiz5a/crps_horiz5a[1],xlab="Lead Time",ylab="relative CRPS",
@@ -995,7 +1046,7 @@ for(i in seq_along(mtype)){
   y = crps_horiz4[[i]]
   lines(hnew,y/y[1],col=cls[i],lwd=3)
 }
-legend("topleft",col=cls[seq_along(mtype)],lwd = 2, lty=1, legend = mname,cex=0.5,ncol=3)
+legend("topleft",col=cls[seq_along(mtype)],lwd = 3, lty=1, legend = mname,cex=0.75,ncol=3)
 
 #HORIZON: delCRPS
 plot(hnew,crps_horiz5a-crps_horiz5a[1],xlab="Lead Time",ylab="delCRPS",
@@ -1004,7 +1055,7 @@ for(i in seq_along(mtype)){
   y = crps_horiz4[[i]]
   lines(hnew,y-y[1],col=cls[i],lwd=3)
 }
-legend("topleft",col=cls[seq_along(mtype)],lwd = 2, lty=1, legend = mname,cex=0.5,ncol=3)
+legend("topleft",col=cls[seq_along(mtype)],lwd = 3, lty=1, legend = mname,cex=0.75,ncol=3)
 
 ## phenoDate plot
 pD_mtype <- gcc_forecast_subset2 %>%  group_by(class) %>%
@@ -1033,10 +1084,60 @@ for(i in seq_along(mtype)){
     lines(pDnew4[[i]],y-y[1],col=cls[i],lwd=3)
 }
 abline(v=0,lty=2)
-legend("topleft",col=cls[seq_along(mtype)],lwd = 2, lty=1, legend = mname,cex=0.5,ncol=3)
+legend("topleft",col=cls[seq_along(mtype)],lwd = 3, lty=1, legend = mname,cex=0.75,ncol=3)
 
 
 
+
+```
+
+
+
+# organize figures into multipanel plots
+
+### LEAD TIME
+
+```{r}
+par(mfrow=c(4,1))
+## OVERALL
+plot(hnew,crps_horiz,xlab="Horizon",ylab="predicted CRPS",type="l",lwd=3)
+
+## MODEL TYPE: CRPS
+plot(hnew,crps_horiz5a,xlab="Lead Time",ylab="predicted CRPS",
+     ylim=h4range,type='l',lwd=1,lty=2)
+for(i in seq_along(mtype)){
+    lines(hnew,crps_horiz4[[i]],col=cls[i],lwd=3)
+}
+legend("topleft",col=cls[seq_along(mtype)],lwd = 3, lty=1, legend = mname,cex=0.75,ncol=3)
+
+
+#MODEL TYPE: delCRPS
+plot(hnew,crps_horiz5a-crps_horiz5a[1],xlab="Lead Time",ylab="delCRPS",
+     ylim=c(-0.005,0.025),type='l',lwd=1,lty=2)
+for(i in seq_along(mtype)){
+  y = crps_horiz4[[i]]
+  lines(hnew,y-y[1],col=cls[i],lwd=3)
+}
+legend("topleft",col=cls[seq_along(mtype)],lwd = 3, lty=1, legend = mname,cex=0.75,ncol=3)
+
+
+## MODEL
+# plot(hnew,crps_horiz5a,xlab="Lead Time",ylab="predicted CRPS",
+#      ylim=h5range,type='l',lwd=1,lty=2)
+# for(i in seq_along(toPlot5)){
+#   y = crps_horiz5[[toPlot5[i]]]
+#   lines(hnew,y,col=cls[i],lwd=3)
+# }
+# legend("topleft",col=cls,lwd = 2, lty=1, legend = teams[toPlot5],cex=0.5,ncol=3)
+
+#MODEL: delCRPS
+plot(hnew,crps_horiz5a-crps_horiz5a[1],xlab="Lead Time",ylab="delCRPS",
+     ylim=c(-0.005,0.025),type='l',lwd=1,lty=2)
+for(i in seq_along(toPlot5)){
+  y = crps_horiz5[[toPlot5[i]]]
+  lines(hnew,y-y[1],col=cls[i],lwd=3)
+}
+legend("topleft",col=cls,lwd = 2, lty=1, legend = teams[toPlot5],cex=0.5,ncol=3)
 
 ```
 
