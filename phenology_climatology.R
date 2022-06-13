@@ -84,14 +84,46 @@ forecast_file <- paste("phenology", min(combined$time), "climatology.csv.gz", se
 
 write_csv(combined, file = forecast_file)
 
-#only run this once and fill out
-#neon4cast::create_model_metadata(file_name)
-metadata_yaml <- "phenology-climatology.yml"
+# Metadata
 
-meta_data_filename <- neon4cast::write_metadata_eml(forecast_file = forecast_file,
-                                                    metadata_yaml = metadata_yaml,
-                                                    forecast_issue_time = Sys.Date(),
-                                                    forecast_iteration_id = "1")
+team_list <- list(list(individualName = list(givenName = "Quinn", 
+                                             surName = "Thomas"),
+                       organizationName = "Virginia Tech",
+                       electronicMailAddress = "rqthomas@vt.edu"))
+
+model_metadata <- list(
+  forecast = list(
+    model_description = list(
+      forecast_model_id =  "climiatology",  #What goes here
+      name = "Historical day-of-year mean", 
+      type = "empirical",  
+      repository = "https://github.com/eco4cast/neon4cast-phenology/blob/master/phenology_climatology.R" 
+    ),
+    initial_conditions = list(
+      status = "absent"
+    ),
+    drivers = list(
+      status = "absent"
+    ),
+    parameters = list(
+      status = "absent"
+    ),
+    random_effects = list(
+      status = "absent"
+    ),
+    process_error = list(
+      status = "data_driven", #options: absent, present, data_driven, propagates, assimilates
+      complexity = 2 #Leave blank if status = absent
+    ),
+    obs_error = list(
+      status = "absent"
+    )
+  )
+)
+
+meta_data_filename <- neon4cast::generate_metadata(forecast_file = forecast_file,
+                                                   team_list = team_list,
+                                                   model_metadata = model_metadata)
 
 neon4cast::submit(forecast_file = forecast_file, 
                   metadata = meta_data_filename, 
