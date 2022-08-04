@@ -17,9 +17,9 @@ for(i in 1:nrow(sites)){
   site_roi <- sites$phenocam_roi[i]
   message(siteName)
   ##URL for daily summary statistics
-  URL_gcc90 <- paste('https://phenocam.sr.unh.edu/data/archive/',siteName,"/ROI/",siteName,"_",site_roi,"_1day.csv",sep="") 
+  URL_gcc90 <- paste('https://phenocam.nau.edu/data/archive/',siteName,"/ROI/",siteName,"_",site_roi,"_1day.csv",sep="") 
   ##URL for individual image metrics
-  URL_individual <- paste('https://phenocam.sr.unh.edu/data/archive/',siteName,"/ROI/",siteName,"_",site_roi,"_roistats.csv",sep="") 
+  URL_individual <- paste('https://phenocam.nau.edu/data/archive/',siteName,"/ROI/",siteName,"_",site_roi,"_roistats.csv",sep="") 
   
   phenoData <- download.phenocam(URL = URL_gcc90)
   dates <- unique(phenoData$date)
@@ -57,7 +57,7 @@ readr::write_csv(allData, "phenology-targets.csv.gz")
 
 aws.s3::put_object(file = "phenology-targets.csv.gz", 
                    object = "phenology/phenology-targets.csv.gz",
-                   bucket = "targets")
+                   bucket = "neon4cast-targets")
 
 ## Publish the targets to EFI.  Assumes aws.s3 env vars are configured.
 #source("../neon4cast-shared-utilities/publish.R")

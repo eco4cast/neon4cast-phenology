@@ -3,7 +3,7 @@ library(lubridate)
 
 message(paste0("Running null model ", Sys.time()))
 
-download_url <- paste0("https://data.ecoforecast.org/targets/",
+download_url <- paste0("https://data.ecoforecast.org/neon4cast-targets/",
                        "phenology", "/", "phenology-targets.csv.gz")
 
 target <- read_csv(download_url)
