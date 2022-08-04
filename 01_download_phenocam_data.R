@@ -29,11 +29,12 @@ for(i in 1:nrow(sites)){
   rcc_sd <- calculate.phenocam.uncertainty(dat=phenoData_individual,dates=dates,target="rcc")
   
   subPhenoData <- phenoData %>% 
-    mutate(siteID = stringr::str_sub(siteName, 10, 13), 
+    mutate(site_id = stringr::str_sub(siteName, 10, 13), 
            time = date) %>% 
-    select(time, siteID, gcc_90, rcc_90)
-  subPhenoData <- cbind(subPhenoData,gcc_sd,rcc_sd)
-  
+    select(time, site_id, gcc_90, rcc_90) |> 
+    pivot_longer(-c("time", "site_id"), names_to = "variable", values_to = "observation") |> 
+    mutate(sd = ifelse(variable == "gcc_90", gcc_sd, rcc_sd))
+
   allData <- rbind(allData,subPhenoData)
   
 }
