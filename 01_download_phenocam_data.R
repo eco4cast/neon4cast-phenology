@@ -45,14 +45,14 @@ combined <- NULL
 for(i in 1:nrow(sites)){
   
   full_time_curr <- tibble(time = full_time,
-                           siteID = rep(sites$field_site_id[i],length(full_time)))
+                           site_id = rep(sites$field_site_id[i],length(full_time)))
   
   combined <- bind_rows(combined, full_time_curr)
 }
 
 
 
-allData <- left_join(combined, allData, by = c("time", "siteID"))
+allData <- left_join(combined, allData, by = c("time", "site_id"))
 
 readr::write_csv(allData, "phenology-targets.csv.gz")
 
