@@ -13,7 +13,7 @@ target_clim <- target %>%
   mutate(doy = yday(time)) %>% 
   group_by(doy, site_id, variable) %>% 
   summarise(mean = mean(observed, na.rm = TRUE),
-            sd = mean(observed, na.rm = TRUE),
+            sd = sd(observed, na.rm = TRUE),
             .groups = "drop") %>% 
   mutate(mean = ifelse(is.nan(mean), NA, mean))
 
@@ -52,6 +52,8 @@ forecast_tibble2 <- tibble(time = rep(forecast_dates, length(subseted_site_names
 
 forecast_tibble <- bind_rows(forecast_tibble1, forecast_tibble2)
 
+forecast <- left_join(forecast_tibble, forecast)
+
 
 
 combined <- forecast %>% 
@@ -61,8 +63,9 @@ combined <- forecast %>%
          sd = median(sd, na.rm = TRUE)) %>%
   pivot_longer(c("mean", "sd"),names_to = "parameter", values_to = "predicted") |> 
   mutate(family = "norm") |> 
-  arrange(site_id, time, statistic) |> 
-  select(time, site_id, variable, family, parameter, predicted)
+  arrange(site_id, time) |> 
+  select(time, site_id, variable, family, parameter, predicted) |> 
+  ungroup()
 
 combined %>% 
   filter(variable == "gcc_90") |> 

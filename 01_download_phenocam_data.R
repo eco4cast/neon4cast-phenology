@@ -32,7 +32,7 @@ for(i in 1:nrow(sites)){
     mutate(site_id = stringr::str_sub(siteName, 10, 13), 
            time = date) %>% 
     select(time, site_id, gcc_90, rcc_90) |> 
-    pivot_longer(-c("time", "site_id"), names_to = "variable", values_to = "observation") |> 
+    pivot_longer(-c("time", "site_id"), names_to = "variable", values_to = "observed") |> 
     mutate(sd = ifelse(variable == "gcc_90", gcc_sd, rcc_sd))
 
   allData <- rbind(allData,subPhenoData)
@@ -44,17 +44,22 @@ combined <- NULL
 
 for(i in 1:nrow(sites)){
   
-  full_time_curr <- tibble(time = full_time,
-                           site_id = rep(sites$field_site_id[i],length(full_time)))
+  full_time_curr1 <- tibble(time = full_time,
+                           site_id = rep(sites$field_site_id[i],length(full_time)),
+                           variable = "gcc_90")
   
-  combined <- bind_rows(combined, full_time_curr)
+  full_time_curr2 <- tibble(time = full_time,
+                            site_id = rep(sites$field_site_id[i],length(full_time)),
+                            variable = "rcc_90")
+  
+  combined <- bind_rows(combined, full_time_curr1, full_time_curr2)
 }
 
 
 
-allData <- left_join(combined, allData, by = c("time", "site_id"))
+allData2 <- left_join(combined, allData, by = c("time", "site_id", "variable"))
 
-readr::write_csv(allData, "phenology-targets.csv.gz")
+readr::write_csv(allData2, "phenology-targets.csv.gz")
 
 aws.s3::put_object(file = "phenology-targets.csv.gz", 
                    object = "phenology/phenology-targets.csv.gz",

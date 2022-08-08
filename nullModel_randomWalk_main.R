@@ -15,7 +15,7 @@ team_name <- "persistence"
 download.file("https://data.ecoforecast.org/neon4cast-targets/phenology/phenology-targets.csv.gz",
               "phenology-targets.csv.gz")
 
-phenoDat <- read.csv("phenology-targets.csv.gz",header=TRUE)
+phenoDat <- read_csv("phenology-targets.csv.gz")
 sites <- unique(as.character(phenoDat$site_id))
 target_variables <- c("gcc_90","rcc_90")
 target_variables_sd <- c("gcc_sd","rcc_sd")
@@ -73,7 +73,7 @@ for(i in 1:length(target_variables)){
     forecast_start_index <- which(full_time$time == max(sitePhenoDat$time) + lubridate::days(1))
    
      d <- tibble::tibble(time = sitePhenoDat_variable$time,
-                        p=as.numeric(sitePhenoDat_variable$observation),
+                        p=as.numeric(sitePhenoDat_variable$observed),
                         p.sd=as.numeric(sitePhenoDat_variable$sd))
     d <- dplyr::full_join(d, full_time)
     
