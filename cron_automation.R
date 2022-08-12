@@ -2,8 +2,8 @@
 #remotes::install_deps()
 library(cronR)
 
-home_dir <- "/home/rstudio/Documents/scripts"
-log_dir <- "/efi_neon_challenge/log/cron"
+home_dir <- "/home/rstudio"
+log_dir <- "/home/rstudio/log/cron"
 
 phenology_repo <- "neon4cast-phenology"
 

@@ -12,11 +12,11 @@ source("randomWalkNullModelFunction.R")
 generate_plots <- FALSE
 team_name <- "persistence"
 
-download.file("https://data.ecoforecast.org/targets/phenology/phenology-targets.csv.gz",
+download.file("https://data.ecoforecast.org/neon4cast-targets/phenology/phenology-targets.csv.gz",
               "phenology-targets.csv.gz")
 
-phenoDat <- read.csv("phenology-targets.csv.gz",header=TRUE)
-sites <- unique(as.character(phenoDat$siteID))
+phenoDat <- read_csv("phenology-targets.csv.gz")
+sites <- unique(as.character(phenoDat$site_id))
 target_variables <- c("gcc_90","rcc_90")
 target_variables_sd <- c("gcc_sd","rcc_sd")
 
@@ -54,11 +54,11 @@ for(i in 1:length(target_variables)){
     
     forecast_length <- 35
     
-    sitePhenoDat <- phenoDat[phenoDat$siteID==sites[s],]
+    sitePhenoDat <- phenoDat[phenoDat$site_id==sites[s],]
     sitePhenoDat$time <- lubridate::as_date(sitePhenoDat$time)
     
-    sitePhenoDat <- sitePhenoDat %>% 
-      pivot_longer(cols = c(all_of(target_variables), all_of(target_variables_sd)), names_to = "variable", values_to = "values")
+    #sitePhenoDat <- sitePhenoDat %>% 
+    #  pivot_longer(cols = c(all_of(target_variables), all_of(target_variables_sd)), names_to = "variable", values_to = "values")
     
     #start_forecast <- max(sitePhenoDat$time) + lubridate::days(1)
     start_forecast <- Sys.Date() + lubridate::days(1)
@@ -71,9 +71,10 @@ for(i in 1:length(target_variables)){
     #full_time <- tibble::tibble(time = seq(min(sitePhenoDat$time), max(sitePhenoDat$time) + lubridate::days(forecast_length), by = "1 day"))
     full_time <- tibble::tibble(time = seq(min(sitePhenoDat$time), Sys.Date()  + lubridate::days(forecast_length), by = "1 day"))
     forecast_start_index <- which(full_time$time == max(sitePhenoDat$time) + lubridate::days(1))
-    d <- tibble::tibble(time = sitePhenoDat_variable$time,
-                        p=as.numeric(sitePhenoDat_variable$values),
-                        p.sd=as.numeric(sitePhenoDat_sd$values))
+   
+     d <- tibble::tibble(time = sitePhenoDat_variable$time,
+                        p=as.numeric(sitePhenoDat_variable$observed),
+                        p.sd=as.numeric(sitePhenoDat_variable$sd))
     d <- dplyr::full_join(d, full_time)
     
     ggplot(d, aes(x = time, y = p)) +
@@ -153,90 +154,26 @@ for(i in 1:length(target_variables)){
     #Filter only the forecasted dates and add columns for required variable
     forecast_saved_tmp <- model_output %>%
       filter(time >= start_forecast) %>%
-      rename(pred = y) %>%
-      mutate(data_assimilation = 0,
-             forecast = 1,
-             obs_flag = 2,
-             siteID = sites[s]) %>%
+      rename(predicted = y) %>%
+      mutate(site_id = sites[s]) %>%
       mutate(forecast_iteration_id = start_forecast) %>%
-      mutate(forecast_project_id = team_name)
+      mutate(forecast_project_id = team_name,
+             variable =  target_variables[i])
     
-    
-    predictions[i, ,s , ] <- forecast_saved_tmp %>%
-      pivot_wider(names_from = ensemble, values_from = pred) %>%
-      select(-c("data_assimilation","forecast", "obs_flag", "siteID", "forecast_iteration_id", "forecast_project_id","time")) %>%
-      as.matrix()
-    
+  
     # Combined with the previous sites
     forecast_saved <- rbind(forecast_saved, forecast_saved_tmp)
     
   }
 }
 
-forecast_time <- unique(forecast_saved$time)
+forecast_file_name <- paste0("phenology-",lubridate::as_date(min(forecast_saved$time)),"-",team_name,".csv.gz")
 
-##Put in EFI standard form (based on EFI standards logistic-metadata-example vignette)
-##Forecast Identifiers (please change to what is needed)
 
-forecast_project_id <- team_name
-forecast_model_id <- "v0.1"
-forecast_iteration_id <- Sys.time()
+forecast_saved <- forecast_saved |> 
+  select(time, site_id, variable, ensemble, predicted)
 
-###Define Dimensions
-timedim <- ncdim_def("time",
-                     units = paste('days since', as.Date(forecast_time[1])),
-                     vals = as.numeric(forecast_time - as.Date(forecast_time[1])),
-                     longname='time')
-ensdim <- ncdim_def("ensemble",
-                    units="",
-                    vals=1:dim(predictions)[4],
-                    longname = "ensemble member")
-sitedim <- ncdim_def("site",
-                     units="",
-                     vals=1:length(sites),
-                     longname = "siteID")
-
-dimnchar   <- ncdim_def("nchar",   "", 1:4, create_dimvar=FALSE )
-## quick check that units are valid
-udunits2::ud.is.parseable(timedim$units)
-udunits2::ud.is.parseable(ensdim$units)
-udunits2::ud.is.parseable(sitedim$units)
-
-###Define Variables
-def_list <- list()
-def_list[[1]] <- ncvar_def(name = "gcc_90",
-                           units = "",
-                           dim = list(timedim, sitedim, ensdim),
-                           longname = "90% quantile of daily green chromatic coordinate")
-def_list[[2]] <- ncvar_def(name = "rcc_90",
-                           units = "",
-                           dim = list(timedim, sitedim, ensdim),
-                           longname = "90% quantile of daily red chromatic coordinate")
-def_list[[3]] <- ncvar_def(name = "siteID",
-                           units = "",
-                           dim = list(dimnchar, sitedim),
-                           longname = "siteID",
-                           prec="char")
-
-###Open netCDF file
-
-forecast_file_name <- paste0("phenology-",lubridate::as_date(forecast_time[1]),"-",team_name,".nc")
-
-ncout <- nc_create(forecast_file_name,def_list,force_v4=T)
-
-###Fill in output data
-ncvar_put(ncout,def_list[[1]], predictions[1, , , ]) #Forecasted gcc_90
-ncvar_put(ncout,def_list[[2]], predictions[2, , , ]) #Forecasted gcc_90
-ncvar_put(ncout,def_list[[3]], sites) #Forecasted parameter values
-
-## Global attributes (metadata)
-ncatt_put(ncout,0,"forecast_project_id", as.character(forecast_project_id),
-          prec =  "text")
-ncatt_put(ncout,0,"forecast_model_id",as.character(forecast_model_id),
-          prec =  "text")
-ncatt_put(ncout,0,"forecast_iteration_id",as.character(forecast_iteration_id),
-          prec =  "text")
-nc_close(ncout)   ## make sure to close the file
+write_csv(forecast_saved, forecast_file_name)
 
 neon4cast::submit(forecast_file = forecast_file_name, 
                   metadata = NULL, 
