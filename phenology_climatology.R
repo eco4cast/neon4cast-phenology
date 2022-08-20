@@ -7,7 +7,6 @@ download_url <- paste0("https://data.ecoforecast.org/neon4cast-targets/",
                        "phenology", "/", "phenology-targets.csv.gz")
 
 target <- read_csv(download_url)
-sites <- read_csv("Phenology_NEON_Field_Site_Metadata_20210928.csv")
 
 target_clim <- target %>%  
   mutate(doy = yday(time)) %>% 
@@ -59,12 +58,13 @@ forecast <- left_join(forecast_tibble, forecast)
 combined <- forecast %>% 
   select(time, site_id, mean, sd, variable) %>% 
   group_by(site_id, variable) %>% 
-  mutate(mean = imputeTS::na_interpolation(mean, maxgap = 3),
-         sd = median(sd, na.rm = TRUE)) %>%
-  pivot_longer(c("mean", "sd"),names_to = "parameter", values_to = "predicted") |> 
-  mutate(family = "norm") |> 
+  mutate(mu = imputeTS::na_interpolation(mean),
+         sigma = median(sd, na.rm = TRUE)) %>%
+  pivot_longer(c("mu", "sigma"),names_to = "parameter", values_to = "predicted") |> 
   arrange(site_id, time) |> 
-  select(time, site_id, variable, family, parameter, predicted) |> 
+  mutate(family = "normal") |> 
+  mutate(start_time = lubridate::as_date(min(time)) - lubridate::days(1)) |> 
+  select(time, start_time, site_id, variable, family, parameter, predicted) |> 
   ungroup()
 
 combined %>% 
@@ -72,8 +72,8 @@ combined %>%
   select(time, site_id,parameter, predicted) %>% 
   pivot_wider(names_from = parameter, values_from = predicted) %>% 
   ggplot(aes(x = time)) +
-  geom_ribbon(aes(ymin=mean - sd*1.96, ymax=mean + sd*1.96), alpha = 0.1) + 
-  geom_point(aes(y = mean)) +
+  geom_ribbon(aes(ymin=mu - sigma*1.96, ymax=mu + sigma*1.96), alpha = 0.1) + 
+  geom_point(aes(y = mu)) +
   facet_wrap(~site_id)
 
 forecast_file <- paste("phenology", min(combined$time), "climatology.csv.gz", sep = "-")
