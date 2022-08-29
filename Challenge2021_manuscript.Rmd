@@ -29,8 +29,14 @@ teams <- c("PhenoPhriends", "PEG_RFR2","CU_Pheno","EFI_U_P","VT_Ph_GDD",
                  "Team_MODIS","greenbears","EFInull","UCSC_P_EDM","climatology")
 n_teams <- length(teams)
 
-cls <- alphabet()[-c(5,8,16,17,21,24,26)] #Team colors 
+cls <- as.character(alphabet()[-c(5,8,16,17,21,24,26)]) #Team colors 
+clsCopy <- cls
+cls[14] <- clsCopy[19]
+cls[19] <- clsCopy[14]
+cls[9] <- clsCopy[6]
+cls[6] <- clsCopy[9]
 #cls <- c("#004949","#000000","orange","cyan",paletteMartin)
+teamCls <- setNames(cls,teams)
 
 site_names <- c("HARV", "BART", "SCBI", "STEI", "UKFS", "GRSM", "DELA", "CLBJ")
 n_sites <- length(site_names)
@@ -234,28 +240,35 @@ multi_team_plot <- function(combined_forecasts, target, theme, date, horizon, si
              start_time = lubridate::as_date(start_time))
   }
   combined_forecasts$cl <- rep(NA,length(nrow(combined_forecasts)))
-  for(i in 1:length(teams)){
-    combined_forecasts$cl[which(combined_forecasts$team==teams[i])] <- cls[i]
+  if(!is.na(siteID)){
+    specificTeams <- intersect(names(teamCls),unique(combined_forecasts$team))
+    specificTeamCls <- teamCls[match(specificTeams,names(teamCls))]
+  }else{
+    specificTeamCls <- teamCls
   }
-  
-  teamColors <- data.frame(team=unique(combined_forecasts$team),
-                           cl=unique(combined_forecasts$cl))
-  teamColors$team <- as.character(teamColors$team)
-  teamColors$cl <- as.character(teamColors$cl)
-  
   p <- combined_forecasts %>%
     ggplot2::ggplot(aes(x = time, color = team)) +
     ggplot2::geom_line(aes(y = mean)) +
     ggplot2::geom_ribbon(aes(x = time, ymin = lower95, ymax = upper95, fill = team), alpha = 0.2) +
     ggplot2::geom_point(aes(y = obs), color = "black", alpha = 0.4) +
-    ggplot2::labs(y = target, x = "time",fill='team') +
+    ggplot2::labs(y = "GCC", x = "Time",fill='team') +
     ggplot2::theme_bw() +
-    ggplot2::scale_color_manual(values = teamColors$cl,labels=teamColors$team)+
-    ggplot2::scale_fill_manual(values = teamColors$cl,labels=teamColors$team)+
-    ggplot2::theme(axis.text.x = element_text(angle = 90,
+    ggplot2::scale_color_manual(values = specificTeamCls) +
+    ggplot2::scale_fill_manual(values = specificTeamCls)+
+    theme(panel.border = element_blank(), panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))
+  if(is.na(siteID)){
+  p <- p + ggplot2::theme(axis.text.x = element_text(angle = 90,
                                               hjust = 0.5, vjust = 0.5))
-  
-  
+  }else{
+  p <- p + ggplot2::theme(axis.text.x = element_text(angle = 90,
+                                              hjust = 0.5, vjust = 0.5,
+                                              size = 20),
+                          axis.text.y=element_text(size=20),
+                          axis.title=element_text(size=25))
+  p <- p + ggtitle("")
+  }
+
   if(class(combined_forecasts$time[1])[1] != "Date"){
     #p <- p + ggplot2::scale_x_datetime(date_labels = scales::date_format("%Y-%m-%d"))
   }else{
@@ -275,13 +288,10 @@ multi_team_plot <- function(combined_forecasts, target, theme, date, horizon, si
     p + facet_wrap(vars(siteID))
     
   }else{
-    p + labs(title = siteID_subset)
+  p
   }
-
 }
 
-
-## version from Quinn
 targetDay <- median(allTransitions$day15)
 window <- 5
 targetRows <- which(lubridate::yday(challengeDays) %in% ((-window:window)+targetDay))
@@ -290,16 +300,16 @@ startDate <- challengeDays[as.numeric(names(which.max(submitted)))]
 
 startDate <- challengeDays[87]
 
-jpeg(file="exampleForecastsOnDay.jpeg",width = 8.57, height = 6.01, units = "in",res = 1000) #Further editted outside of R
-multi_team_plot(combined_forecasts = gcc_forecast_subset,  ## need to update function to allow option to rescale y-axis
+jpeg(file="exampleForecastsOnDay.jpeg",width = 8.57, height = 6.01, units = "in",res = 1000)
+multi_team_plot(combined_forecasts = gcc_forecast_subset,  
                 target = "gcc_90", 
                 theme = "phenology", 
                 date = startDate, 
                 horizon = 35)
 dev.off()
 
-jpeg(file="exampleForecastsOnDay_Harvard.jpeg",width = 9.5, height = 6, units = "in",res = 1000) #Further editted outside of R
-multi_team_plot(combined_forecasts = gcc_forecast_subset,  ## need to update function to allow option to rescale y-axis
+jpeg(file="exampleForecastsOnDay_Harvard.jpeg",width = 9.5, height = 6, units = "in",res = 1000)
+multi_team_plot(combined_forecasts = gcc_forecast_subset, 
                 target = "gcc_90", 
                 theme = "phenology", 
                 date = startDate, 
@@ -407,7 +417,7 @@ plotForecastedValuesOverTime(site_number=2,gcc_forecast_subset=gcc_forecast_subs
 #' Plot Statistics with Lead Time
 #'
 #' @param highlightTms Teams to highlight (NA for publication and not highlighting any)
-#' @param statistic Desired statistic ("CRPS", "bias" or "precision"). Currently doesn't work for precision yet
+#' @param statistic Desired statistic ("CRPS", "bias" or "sd"). 
 #' @param ylim Limit range of y-axis for plot
 #' @param site_number Row number of site in site_names (eg, 1)
 #' @param gcc_forecast_subset Forecasts object
@@ -451,6 +461,8 @@ plotStatisticsOverTime <- function(highlightTms = NA, statistic, ylim = c(0, 1),
           computedStat <- vl-organizedDat$mean
         }else if(statistic=="CRPS"){
           computedStat <- organizedDat$crps
+        }else if(statistic=="sd"){
+          computedStat <- organizedDat$sd
         }
         lines(tranDate-as.Date(organizedDat$start_time),computedStat,col=scales::alpha(cls[tm],tF),lwd=lwdVl)
       }
@@ -465,6 +477,7 @@ jpeg(file="crpsOfTransitionDates_stei.jpeg",width = 7.5, height = 5, units = "in
 plotStatisticsOverTime(highlightTms=NA,statistic="CRPS",ylim=c(0,0.15),site_number=4,gcc_forecast_subset=gcc_forecast_subset) 
 dev.off()
 plotStatisticsOverTime(highlightTms=NA,statistic="bias",ylim=c(-0.10,0.15),site_number=4,gcc_forecast_subset=gcc_forecast_subset) 
+plotStatisticsOverTime(highlightTms=NA,statistic="sd",ylim=c(0,0.15),site_number=1,gcc_forecast_subset=gcc_forecast_subset)
 
 pdf(file="crpsOfTransitionDates_all.pdf",height=5,width=12)
 for(s in 1:n_sites){
