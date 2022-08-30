@@ -14,7 +14,6 @@ library(pals)
 library(tidyverse)
 library(tools)
 library(mgcv)
-
 ```
 
 Intro, Methods, Discussion, etc will be developed in [Google Docs](https://docs.google.com/document/d/1LvdfX1qk6AJIgRetZRl9qLUt-1kTlWJv4ftUMm2NJzQ/edit?usp=sharing)
@@ -321,170 +320,159 @@ dev.off()
 
 #Lead Time Figures: 
 
-##Figure 3: Example of how teams' forecasts change as lead time decreases for Bartlett for 15%, 50%, and 85% thresholds. 
+##Figure 3: Example of how teams' forecasts change as lead time decreases for two sites for 15%, 50%, and 85% thresholds, Figure 4: Statistics for changes to lead time, and supplementary
 ```{r, echo=FALSE}
 ##pdf(file="ForecastedValuesOnTransitionDates_presentationFigures.pdf",height=5,width=12)
 
 #' Plot Forecasted Values of Greenness on Transition Dates with Lead Time
 #'
-#' @param site_number Row number of site in site_names (eg, 1)
+#' @param all_site_number Row number of site(s) in site_names (eg, 1 or c(1,2))
 #' @param gcc_forecast_subset Forecasts object
+#' @param statistic The desired statistic or gcc to plot("GCC","CRPS", "bias" or "sd")
+#' @param ylims Vector of the limits for the y-axis (e.g., (0,1))
 #' @param rescaled Logical for if you want to rescale forecasted values between 0 and 1 instead of raw gcc_90 values
 #'
 #' @return
 #' @export
 #'
 #' @examples
-plotForecastedValuesOverTime <- function(site_number, gcc_forecast_subset,rescaled){
-  par(mfrow=c(1,4),mai=c(0.5,0.5,1,0.1))
+plotForecastedValuesOverTime <- function(all_site_number, gcc_forecast_subset,statistic,ylims, rescaled){
+  if(length(all_site_number)==1){
+    par(mfrow=c(length(all_site_number),4),mai=c(0.4,0.5,0.2,0.1))
+  }else if(length(all_site_number)==2){
+    layout(matrix(c(1,4,2,5,3,6,7,7),ncol=4,byrow=FALSE))
+    par(mai=c(0.4,0.5,0.2,0.1))
+  }else{
+    print("Unknown number of sites")
+    return()
+  }
+  
+  if(length(all_site_number)>1){
+    multipleSites=TRUE
+  }else{
+    multipleSites=FALSE
+  }
   finalTms <- character()
   plottedCls <- character()
-  sitDat <- gcc_forecast_subset[gcc_forecast_subset$siteID==site_names[site_number],] 
-  for(t in c(2,5,8)){ #Loops over the transition dates
-    cl <- 1
-    vl <- as.numeric(allTransitions[site_number,(t+1)])
-    sdVal <- allTransitions[site_number,(t+2)]
-    if(rescaled){
-    vl <- rescale(vl,to=c(0,1),from=c(allTransitions$minimum[site_number],allTransitions$maximum[site_number])) ##Rescales gcc values between 0 and 1
-        plot(x=numeric(),y=numeric(),type="l",xlim=c(0,35),ylim=c(0,1),ylab="",xlab="Days Before Transition Date",main=paste(site_names[site_number],round(vl,digits=2)),bty="n")
-    }else{
-          plot(x=numeric(),y=numeric(),type="l",xlim=c(0,35),ylim=c(0.3,0.5),ylab="",xlab="Days Before Transition Date",main=paste(site_names[site_number],round(vl,digits=2)),bty="n")
-    }
-    abline(h=vl,col="black",lwd=5,lty=2)
-    for(tm in 1:n_teams){
-      tmSitDat <- sitDat[sitDat$team==teams[tm],] #Subset by team
-      allPlottedData <- matrix(nrow=length(site_names),ncol=35) #35 columns for the different forecast horizons 
-      #for(s in 1:length(site_names)){
-      
+  for(site_number in all_site_number){
+    sitDat <- gcc_forecast_subset[gcc_forecast_subset$siteID==site_names[site_number],] 
+    for(t in c(2,5,8)){ #Loops over the transition dates
       tranDate <- as.Date(unlist(allTransitions[site_number,t]),origin=as.Date("2020-12-31"))
-      beforeDays <- seq(tranDate-34,tranDate,by="day")
-      organizedDat <- tmSitDat[as.Date(tmSitDat$time)==tranDate,] #Subset of the forecasts that forecasted the transition date 
-      if(nrow(organizedDat)>0){
-        if(t==8){
-          finalTms <- c(finalTms,as.character(teams[tm]))
-          plottedCls <- c(plottedCls,cls[tm])
+      cl <- 1
+      vl <- as.numeric(allTransitions[site_number,(t+1)])
+      sdVal <- allTransitions[site_number,(t+2)]
+      if(!multipleSites){ #If there is only 1 site it will automatically add the panel letterings and titles
+        if(t==2){
+          tle <- paste("a)",site_names[site_number],"15%")
+        }else if(t == 5){
+          tle <- paste("b)",site_names[site_number],"50%")
+        }else if(t==8){
+          tle <- paste("c)",site_names[site_number],"85%")
         }
-        sitTmMax <- max(organizedDat$mean,na.rm=TRUE)
-        if(rescaled){
-        rescaledDat <- rescale(organizedDat$mean,to=c(0,1),from=c(allTransitions$minimum[site_number],allTransitions$maximum[site_number]))#sitTmMax)) #Rescales forecasted values between 0 and 1
+      }else{
+        tle <- "" #Titles added outside of R
+      }
+      if(rescaled){
+        vl <- rescale(vl,to=c(0,1),from=c(allTransitions$minimum[site_number],allTransitions$maximum[site_number])) ##Rescales gcc values between 0 and 1
+      }
+      if(multipleSites){
+        plot(x=numeric(),y=numeric(),type="l",xlim=c(0,35),ylim=ylims,ylab="",xlab="",main="",bty="n",axes = FALSE)
+        if(site_number==all_site_number[1]){
+          axis(1, at=seq(0,35,5),labels=rep("",8))
+        }else if(site_number==all_site_number[2]){
+          axis(1, at=seq(0,35,5),labels=seq(0,35,5))
+        }
+        if(t==2){
+          axis(2, at=seq(ylims[1],ylims[2],length.out = 5),labels=seq(ylims[1],ylims[2],length.out = 5))
         }else{
-          rescaledDat <- organizedDat$mean
+          axis(2, at=seq(ylims[1],ylims[2],length.out = 5),labels=rep("",5))
         }
-        for(j in 1:length(rescaledDat)){ #Some values get scaled below 0 
-          rescaledDat[j] <- max(rescaledDat[j],0)
-        }
-        for(d in 1:length(beforeDays)){ #Not all teams submitted forecasts for all 35 forecast horizons 
-          replacement <- rescaledDat[organizedDat$start_time==beforeDays[d]]
-          if(length(replacement)==0){
-            if(d>1){
-              if(!is.na(allPlottedData[site_number,(d-1)])){
-                replacement <- allPlottedData[site_number,(d-1)] #filling in missing predictions with the previous day's 
-              }else{
-                replacement <- NA   
-              }
-            }else{
-              replacement <- NA   
+      }else{
+        plot(x=numeric(),y=numeric(),type="l",xlim=c(0,35),ylim=ylims,ylab="",xlab="Days Before Transition Date",main=tle,bty="n")
+      }
+      if(statistic=="GCC"){
+        abline(h=vl,col="black",lwd=5,lty=2)
+      }
+      for(tm in 1:n_teams){
+        tmSitDat <- sitDat[sitDat$team==teams[tm],] #Subset by team
+        allPlottedData <- matrix(nrow=length(site_names),ncol=35) #35 columns for the different forecast horizons 
+        tranDate <- as.Date(unlist(allTransitions[site_number,t]),origin=as.Date("2020-12-31"))
+        beforeDays <- seq(tranDate-34,tranDate,by="day")
+        organizedDat <- tmSitDat[as.Date(tmSitDat$time)==tranDate,] #Subset of the forecasts that forecasted the transition date 
+        if(nrow(organizedDat)>0){
+          if(t==8){
+            if(! as.character(teams[tm]) %in% finalTms){
+              finalTms <- c(finalTms,as.character(teams[tm]))
+              plottedCls <- c(plottedCls,cls[tm])
             }
           }
-          allPlottedData[site_number,d] <- replacement[length(replacement)]#Some teams occassionally submitted multiple forecasts on a day so taking the last one submitted
+          sitTmMax <- max(organizedDat$mean,na.rm=TRUE)
+          if(statistic=="GCC"){
+            if(rescaled){
+              rescaledDat <- rescale(organizedDat$mean,to=c(0,1),from=c(allTransitions$minimum[site_number],allTransitions$maximum[site_number]))#sitTmMax)) #Rescales forecasted values between 0 and 1
+            }else{
+              rescaledDat <- organizedDat$mean
+            }
+            for(j in 1:length(rescaledDat)){ #Some values get scaled below 0 
+              rescaledDat[j] <- max(rescaledDat[j],0)
+            }
+            for(d in 1:length(beforeDays)){ #Not all teams submitted forecasts for all 35 forecast horizons 
+              replacement <- rescaledDat[organizedDat$start_time==beforeDays[d]]
+              if(length(replacement)==0){
+                if(d>1){
+                  if(!is.na(allPlottedData[site_number,(d-1)])){
+                    replacement <- allPlottedData[site_number,(d-1)] #filling in missing predictions with the previous day's 
+                  }else{
+                    replacement <- NA   
+                  }
+                }else{
+                  replacement <- NA   
+                }
+              }
+              allPlottedData[site_number,d] <- replacement[length(replacement)]#Some teams occassionally submitted multiple forecasts on a day so taking the last one submitted
+            }
+            computedStat <- colMeans(allPlottedData,na.rm = TRUE)
+            leadTimes <- seq(35,1)
+          }else{
+            leadTimes <- tranDate-as.Date(organizedDat$start_time)
+            if(statistic=="bias"){
+              computedStat <- vl-organizedDat$mean
+            }else if(statistic=="CRPS"){
+              computedStat <- organizedDat$crps
+            }else if(statistic=="sd"){
+              computedStat <- organizedDat$sd
+            }
+          }
+          lines(leadTimes,computedStat,col=cls[tm],lwd=2)
         }
-        # }
-        #}
-        
-        # ecoforecastR::ciEnvelope(x=seq(-35,-1)[!is.na(colMeans(allPlottedData,na.rm = TRUE))],
-        #                          ylo = apply(allPlottedData[,!is.na(colMeans(allPlottedData,na.rm = TRUE))], MARGIN=2, min, na.rm=TRUE),
-        #                          yhi=apply(allPlottedData[,!is.na(colMeans(allPlottedData,na.rm = TRUE))],MARGIN = 2, max, na.rm=TRUE),
-        #                          col=scales::alpha(cls[cl],0.5))
-        lines(seq(35,1),colMeans(allPlottedData,na.rm = TRUE),col=cls[tm],lwd=2)
       }
+    }
+    if(site_number==all_site_number[length(all_site_number)]){
+      plot(x=numeric(),y=numeric(),type="l",xlim=c(-35,0),ylim=c(0,1),ylab="",xlab="",main="",bty="n",xaxt="n",yaxt="n")
+      legend("topleft",c("True Value",as.character(finalTms)),col=c("black",plottedCls),lty=c(2,rep(1,length(finalTms))),lwd=c(4,rep(3,length(finalTms))),bty = "n")
     }
   }
-  plot(x=numeric(),y=numeric(),type="l",xlim=c(-35,0),ylim=c(0,1),ylab="",xlab="",main="Legend",bty="n",xaxt="n",yaxt="n")
-  legend("topleft",c("True Value",as.character(finalTms)),col=c("black",plottedCls),lty=c(2,rep(1,length(finalTms))),lwd=c(4,rep(3,length(finalTms))),bty = "n")
 }
-
-jpeg(file="forecastedValuesOfTransitionDates_bart.jpeg",width = 7.5, height = 5, units = "in",res = 1000)
-plotForecastedValuesOverTime(site_number=2,gcc_forecast_subset=gcc_forecast_subset,rescaled=TRUE)
-dev.off()
-
-plotForecastedValuesOverTime(site_number=2,gcc_forecast_subset=gcc_forecast_subset,rescaled=FALSE)
-
-```
-
-
-##Figure 4: Statistics (CRPS and bias) with Lead Time to 15%, 50%, and 85% transition dates
-```{r, echo=FALSE}
-#' Plot Statistics with Lead Time
-#'
-#' @param highlightTms Teams to highlight (NA for publication and not highlighting any)
-#' @param statistic Desired statistic ("CRPS", "bias" or "sd"). 
-#' @param ylim Limit range of y-axis for plot
-#' @param site_number Row number of site in site_names (eg, 1)
-#' @param gcc_forecast_subset Forecasts object
-#'
-#' @return
-#' @export
-#'
-#' @examples
-plotStatisticsOverTime <- function(highlightTms = NA, statistic, ylim = c(0, 1), site_number, gcc_forecast_subset){
-  par(mfrow=c(1,4),mai=c(0.5,0.5,1,0.1))
-  sitDat <- gcc_forecast_subset[gcc_forecast_subset$siteID == site_names[site_number], ]
   
-  finalTms <- character()
-  plottedCls <- character()
-  for(t in c(2,5,8)){ #Loops over the transition dates
-    tranDate <- as.Date(unlist(allTransitions[site_number,t]),origin=as.Date("2020-12-31"))
-    vl <- as.numeric(allTransitions[site_number,(t+1)])
-    sdVal <- allTransitions[site_number,(t+2)]
 
-    plot(x=numeric(),y=numeric(),type="l",xlim=c(0,35),ylim=ylim,ylab=statistic,xlab="Days Before Transition Date",main=paste(site_names[site_number],tranDate),bty="n")
-
-    for(tm in 1:n_teams){
-      tmSitDat <- sitDat[sitDat$team==teams[tm],] #Subset by team
-      organizedDat <- tmSitDat[as.Date(tmSitDat$time)==tranDate,] #Subset of the forecasts that forecasted the transition date 
-      if(nrow(organizedDat)>0){
-        if(t==8){
-          finalTms <- c(finalTms,as.character(teams[tm]))
-          plottedCls <- c(plottedCls,as.character(cls[tm]))
-        }
-        sitTmMax <- max(organizedDat$mean,na.rm=TRUE)
-
-        if(is.na(highlightTms) || tm%in%highlightTms){ #No transparency if you do not want to highlight teams
-                                                       #or if the team is within the highlighted teams
-          tF <- 1
-          lwdVl <- 3
-        }else{
-          tF <- 0.2
-          lwdVl <- 1
-        }
-        if(statistic=="bias"){
-          computedStat <- vl-organizedDat$mean
-        }else if(statistic=="CRPS"){
-          computedStat <- organizedDat$crps
-        }else if(statistic=="sd"){
-          computedStat <- organizedDat$sd
-        }
-        lines(tranDate-as.Date(organizedDat$start_time),computedStat,col=scales::alpha(cls[tm],tF),lwd=lwdVl)
-      }
-    }
-  } 
-  plot(x=numeric(),y=numeric(),type="l",xlim=c(0,35),ylim=c(0,1),ylab="",xlab="",
-       xaxt = "n", yaxt = "n", main="Legend",bty="n")
-  legend("topleft",as.character(finalTms),col=plottedCls,lty=rep(1,length(finalTms)),lwd=rep(3,length(finalTms)),bty = "n")
-}
-
-jpeg(file="crpsOfTransitionDates_stei.jpeg",width = 7.5, height = 5, units = "in",res = 1000)
-plotStatisticsOverTime(highlightTms=NA,statistic="CRPS",ylim=c(0,0.15),site_number=4,gcc_forecast_subset=gcc_forecast_subset) 
+jpeg(file="forecastedValuesOfTransitionDates_rescaled.jpeg",width = 9, height = 5, units = "in",res = 1000)
+plotForecastedValuesOverTime(all_site_number=c(6,2),gcc_forecast_subset=gcc_forecast_subset,statistic = "GCC", ylims = c(0,1), rescaled=TRUE)
 dev.off()
-plotStatisticsOverTime(highlightTms=NA,statistic="bias",ylim=c(-0.10,0.15),site_number=4,gcc_forecast_subset=gcc_forecast_subset) 
-plotStatisticsOverTime(highlightTms=NA,statistic="sd",ylim=c(0,0.15),site_number=1,gcc_forecast_subset=gcc_forecast_subset)
 
-pdf(file="crpsOfTransitionDates_all.pdf",height=5,width=12)
-for(s in 1:n_sites){
-  print(s)
-  plotStatisticsOverTime(highlightTms=NA,statistic="CRPS",ylim=c(0,0.15),site_number=s,gcc_forecast_subset) 
-    plotStatisticsOverTime(highlightTms=NA,statistic="bias",ylim=c(-0.15,0.15),site_number=s,gcc_forecast_subset)
-}
+jpeg(file="forecastedValuesOfTransitionDates.jpeg",width = 9, height = 5, units = "in",res = 1000)
+plotForecastedValuesOverTime(all_site_number=c(6,2),gcc_forecast_subset=gcc_forecast_subset,statistic = "GCC", ylims=c(0.3,0.5),rescaled=FALSE)
+dev.off()
+
+jpeg(file="CRPSvsLeadTimeTrans.jpeg",width = 9, height = 5, units = "in",res = 1000)
+plotForecastedValuesOverTime(all_site_number=c(6,2),gcc_forecast_subset=gcc_forecast_subset,statistic = "CRPS", ylims=c(0,0.12),rescaled=FALSE)
+dev.off()
+
+jpeg(file="BiasvsLeadTimeTrans.jpeg",width = 9, height = 5, units = "in",res = 1000)
+plotForecastedValuesOverTime(all_site_number=c(6,2),gcc_forecast_subset=gcc_forecast_subset,statistic = "bias", ylims=c(-0.05,0.12),rescaled=FALSE)
+dev.off()
+
+jpeg(file="SDvsLeadTimeTrans.jpeg",width = 9, height = 5, units = "in",res = 1000)
+plotForecastedValuesOverTime(all_site_number=c(6,2),gcc_forecast_subset=gcc_forecast_subset,statistic = "sd", ylims=c(0,0.05),rescaled=FALSE)
 dev.off()
 
 ```
