@@ -29,7 +29,7 @@ RandomWalk = "
 model{
   # Priors
   x[1] ~ dnorm(x_ic,tau_add)
-  tau_obs[1] <- 1 / pow(sd_obs[1], 2)
+  tau_obs[1] <- 1 / pow(sd_obs, 2)
   y[1] ~ dnorm(x[1],tau_obs[1])
 
   sd_add  ~ dunif(0.000001, 100)
@@ -38,7 +38,7 @@ model{
   # Process Model
   for(t in 2:N){
     x[t] ~ dnorm(x[t-1], tau_add)
-    tau_obs[t] <- 1 / pow(sd_obs[t], 2)
+    tau_obs[t] <- 1 / pow(sd_obs, 2)
     y[t] ~ dnorm(x[t], tau_obs[t])
   }
 }
@@ -51,6 +51,7 @@ for(i in 1:length(target_variables)){
   for(s in 1:length(sites)){
     
     message(paste0("forecasting ",target_variables[i]," at site: ",sites[s]))
+    message("site ", s, " of ", length(sites))
     
     forecast_length <- 35
     
@@ -86,7 +87,7 @@ for(i in 1:length(target_variables)){
     d$p.sd[d$p.sd == 0.0] <- min(d$p.sd[d$p.sd != 0.0])
     d$N <- length(d$p)
     data <- list(y = d$p,
-                 sd_obs = d$p.sd,
+                 sd_obs = 0.01,
                  N = length(d$p),
                  x_ic = 0.3)
     
@@ -169,9 +170,9 @@ for(i in 1:length(target_variables)){
 
 forecast_file_name <- paste0("phenology-",lubridate::as_date(min(forecast_saved$time)),"-",team_name,".csv.gz")
 
-
 forecast_saved <- forecast_saved |> 
-  select(time, site_id, variable, ensemble, predicted)
+  mutate(start_time = lubridate::as_date(min(time)) - lubridate::days(1)) |> 
+  select(time, start_time, site_id, variable, ensemble, predicted)
 
 write_csv(forecast_saved, forecast_file_name)
 
