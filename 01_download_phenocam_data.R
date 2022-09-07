@@ -17,9 +17,9 @@ for(i in 1:nrow(sites)){
   site_roi <- sites$phenocam_roi[i]
   message(siteName)
   ##URL for daily summary statistics
-  URL_gcc90 <- paste('https://phenocam.sr.unh.edu/data/archive/',siteName,"/ROI/",siteName,"_",site_roi,"_1day.csv",sep="") 
+  URL_gcc90 <- paste('https://phenocam.nau.edu/data/archive/',siteName,"/ROI/",siteName,"_",site_roi,"_1day.csv",sep="") 
   ##URL for individual image metrics
-  URL_individual <- paste('https://phenocam.sr.unh.edu/data/archive/',siteName,"/ROI/",siteName,"_",site_roi,"_roistats.csv",sep="") 
+  URL_individual <- paste('https://phenocam.nau.edu/data/archive/',siteName,"/ROI/",siteName,"_",site_roi,"_roistats.csv",sep="") 
   
   phenoData <- download.phenocam(URL = URL_gcc90)
   dates <- unique(phenoData$date)
@@ -29,11 +29,12 @@ for(i in 1:nrow(sites)){
   rcc_sd <- calculate.phenocam.uncertainty(dat=phenoData_individual,dates=dates,target="rcc")
   
   subPhenoData <- phenoData %>% 
-    mutate(siteID = stringr::str_sub(siteName, 10, 13), 
+    mutate(site_id = stringr::str_sub(siteName, 10, 13), 
            time = date) %>% 
-    select(time, siteID, gcc_90, rcc_90)
-  subPhenoData <- cbind(subPhenoData,gcc_sd,rcc_sd)
-  
+    select(time, site_id, gcc_90, rcc_90) |> 
+    pivot_longer(-c("time", "site_id"), names_to = "variable", values_to = "observed") |> 
+    mutate(sd = ifelse(variable == "gcc_90", gcc_sd, rcc_sd))
+
   allData <- rbind(allData,subPhenoData)
   
 }
@@ -43,21 +44,26 @@ combined <- NULL
 
 for(i in 1:nrow(sites)){
   
-  full_time_curr <- tibble(time = full_time,
-                           siteID = rep(sites$field_site_id[i],length(full_time)))
+  full_time_curr1 <- tibble(time = full_time,
+                           site_id = rep(sites$field_site_id[i],length(full_time)),
+                           variable = "gcc_90")
   
-  combined <- bind_rows(combined, full_time_curr)
+  full_time_curr2 <- tibble(time = full_time,
+                            site_id = rep(sites$field_site_id[i],length(full_time)),
+                            variable = "rcc_90")
+  
+  combined <- bind_rows(combined, full_time_curr1, full_time_curr2)
 }
 
 
 
-allData <- left_join(combined, allData, by = c("time", "siteID"))
+allData2 <- left_join(combined, allData, by = c("time", "site_id", "variable"))
 
-readr::write_csv(allData, "phenology-targets.csv.gz")
+readr::write_csv(allData2, "phenology-targets.csv.gz")
 
 aws.s3::put_object(file = "phenology-targets.csv.gz", 
                    object = "phenology/phenology-targets.csv.gz",
-                   bucket = "targets")
+                   bucket = "neon4cast-targets")
 
 ## Publish the targets to EFI.  Assumes aws.s3 env vars are configured.
 #source("../neon4cast-shared-utilities/publish.R")
