@@ -39,6 +39,9 @@ teamCls <- setNames(cls,teams)
 
 site_names <- c("HARV", "BART", "SCBI", "STEI", "UKFS", "GRSM", "DELA", "CLBJ")
 n_sites <- length(site_names)
+
+classCls <- c("#1b9e77","#d95f02","#7570b3","#e7298a","#FF0010")
+classCls <- setNames(classCls,c("covariate","dynamic","persist","static","clim"))
 ```
 
 ##Grab Forecasts and Organize Data
@@ -477,7 +480,7 @@ dev.off()
 
 ```
 
-##Figure 5. Calculate the lead times that each model and site performed better than climatology (lower CRPS) for different transition dates and Supplementary Figure 
+##Extra Figure. Calculate the lead times that each model and site performed better than climatology (lower CRPS) for different transition dates and Supplementary Figure 
 ```{r}
 allForecastHorizons_clim <- matrix(nrow=0,ncol=4)
 
@@ -738,6 +741,11 @@ meta["VT_Ph_GDD","type"] = "statistical"
 meta$class <- paste0(meta$drivers,meta$initial_conditions)
 meta$team <- rownames(meta)
 meta$class[meta$team == "climatology"] = "clim"
+}else{
+meta$class[meta$class=="TRUEFALSE"] <- "covariate"
+meta$class[meta$class=="FALSEFALSE"] <- "static"
+meta$class[meta$class=="TRUETRUE"] <- "dynamic"
+meta$class[meta$class=="FALSETRUE"] <- "persist"
 }
 
 ```
@@ -790,14 +798,17 @@ beta.team$team = reorder(beta.team$team,beta.team$Estimate)
 
 
 ```{r}
+jpeg(file="GAM_TeamsComparedToClim.jpeg",width = 8, height = 5, units = "in",res=1000)
 ggplot(beta.team) + 
   geom_bar( aes(x=team, y=Estimate, fill=class),
             stat="identity",
             alpha=0.75) +
  geom_errorbar( aes(x=team, ymin=Estimate-1.96*SE, ymax=Estimate+1.96*SE), width=0.4, colour="orange", alpha=0.9, size=1.3) +
   coord_flip() + ylab("CRPS(model) - CRPS(clim)") +
-  theme(legend.position = c(0.8, 0.2)) +
+  theme(legend.position = c(0.8, 0.2), panel.background = element_blank()) +
   scale_fill_brewer(palette="Dark2")
+dev.off()
+
 
 ## TODO: legend, put in multi-panel
 ```
@@ -820,12 +831,14 @@ summary(siteLM)
 
 beta.site$site = reorder(beta.site$site,beta.site$day50)
 
+jpeg(file="GAM_siteCRPS.jpeg",width = 7, height = 4, units = "in",res=1000)
 ggplot(beta.site) + 
   geom_bar( aes(x=site, y=Estimate), stat="identity", fill="skyblue", alpha=0.5) +
   geom_errorbar( aes(x=site, ymin=Estimate-1.96*SE, ymax=Estimate+1.96*SE), width=0.4, colour="orange", alpha=0.9, size=1.3) +
-  coord_flip() + ylab("CRPS")
+  coord_flip() + ylab("CRPS") +
+  theme(panel.background = element_blank())
 ## TODO: RUN LM vs LAT; ORDER BY LAT OR GREENUP DATE (whichever is more significant), put in multi-panel; Color = usage elsewhere
-
+dev.off()
 
 ## site by team interactions
 alpha = as.data.frame(summary(fit2i)$p.table) %>% mutate(lab = rownames(.)) %>% separate(lab,c("site","team"),sep = ":")  ## grab summary table
@@ -856,11 +869,15 @@ alpha = alpha %>% left_join(aT,by="team") %>%  ## add site effects as column
 colnames(alpha)[4] <- "pval"
 alpha = alpha %>% mutate(sig = as.numeric(pval < 0.05)) ## add significance test for visualization
 alpha$Estimate[alpha$Estimate<0] = 0 ## sanity check
+
 ## visualize
+jpeg(file="GAM_interactions.jpeg",width = 5, height = 8, units = "in",res=1000)
 ggplot(alpha) + aes(x=team, y=Estimate,fill=site) +
   geom_bar(stat="identity",  alpha=alpha$sig+0.3, position = "dodge") + scale_alpha(range = c(0.1, 0.9)) +
 #  geom_errorbar( aes(x=team, ymin=Estimate-1.96*SE, ymax=Estimate+1.96*SE), width=0.4, colour="orange", alpha=0.9, position="dodge") +
-  coord_flip() + ylab("CRPS")
+  coord_flip() + ylab("CRPS") +
+  theme_bw()
+dev.off()
 ## TODO: consistent site color scheme
 
 ## Lead time plots
@@ -933,8 +950,8 @@ if(!file.exists("fit5.RDS")){
                                method="REML"))
     saveRDS(fit5,file="fit5.RDS")
   }
-} else {
-  readRDS("fit5.RDS")
+}else {
+  fit5 <- readRDS("fit5.RDS")
 }
 names(fit5) <- teams
 lapply(fit5,summary)
@@ -980,18 +997,18 @@ plot(hnew,crps_horiz5a/crps_horiz5a[1],xlab="Lead Time",ylab="predicted CRPS",
      ylim=c(0.75,2),type='l',lwd=1,lty=2)
 for(i in seq_along(toPlot5)){
   y = crps_horiz5[[toPlot5[i]]]
-  lines(hnew,y/y[1],col=cls[i],lwd=3)
+  lines(hnew,y/y[1],col=cls[toPlot5[i]],lwd=3)
 }
-legend("topleft",col=cls,lwd = 2, lty=1, legend = teams[toPlot5],cex=0.5,ncol=3)
+legend("topleft",col=cls[toPlot5],lwd = 2, lty=1, legend = teams[toPlot5],cex=0.5,ncol=3,bty="n")
 
-#HORIZON: delCRPS
+#HORIZON: delCRPS (Include)
 plot(hnew,crps_horiz5a-crps_horiz5a[1],xlab="Lead Time",ylab="delCRPS",
-     ylim=c(-0.005,0.025),type='l',lwd=1,lty=2)
+     ylim=c(-0.005,0.025),type='l',lwd=1,lty=2,bty="n")
 for(i in seq_along(toPlot5)){
   y = crps_horiz5[[toPlot5[i]]]
-  lines(hnew,y-y[1],col=cls[i],lwd=3)
+  lines(hnew,y-y[1],col=cls[toPlot5[i]],lwd=3)
 }
-legend("topleft",col=cls,lwd = 2, lty=1, legend = teams[toPlot5],cex=0.5,ncol=3)
+legend("topleft",col=cls[toPlot5],lwd = 2, lty=1, legend = teams[toPlot5],cex=0.5,ncol=3, bty="n")
 
 ## phenoDate plot
 
@@ -1011,10 +1028,10 @@ crps_pD5a <- predict(fit5a,data.frame(horizon=1,phenoDate=-80:40))
 plot(-80:40,crps_pD5a,xlab="Days from 15%",ylab="predicted CRPS",
      ylim=h5range,type='l',lwd=1,lty=2,xlim=c(-80,40))
 for(i in seq_along(toPlot5)){
-    lines(pDnew[[toPlot5[i]]],crps_pD5[[toPlot5[i]]],col=cls[i],lwd=3)
+    lines(pDnew[[toPlot5[i]]],crps_pD5[[toPlot5[i]]],col=cls[toPlot5[i]],lwd=3)
 }
 abline(v=0,lty=2)
-legend("topleft",col=cls,lwd = 2, lty=1, legend = teams[toPlot5],cex=0.5,ncol=3)
+legend("topleft",col=cls[toPlot5],lwd = 2, lty=1, legend = teams[toPlot5],cex=0.5,ncol=3,bty="n")
 
 ## find max
 pD5max = rep(NA,length(teams))
@@ -1036,7 +1053,8 @@ fit
 #            method="REML")
 #summary(fit4)
 
-mtype = unique(gcc_forecast_subset2$class)
+#mtype = unique(gcc_forecast_subset2$class)
+mtype <- names(classCls)
 if(!file.exists("fit4.RDS")){
   fit4 <- list()
   for(i in seq_along(mtype)){
@@ -1055,9 +1073,10 @@ lapply(fit4,summary)
 
 ```
 
-plots
+plots (extra)
 ```{r,echo=FALSE}
-mname = c("dynamic","persist","clim","covariate","static")
+#mname = c("dynamic","persist","clim","covariate","static")
+mname <- mtype
 
 ## horizon plot
 hnew <- 1:35
@@ -1069,33 +1088,33 @@ h4range = c(min(sapply(crps_horiz4,min),na.rm=TRUE),
             max(sapply(crps_horiz4,max),na.rm=TRUE))
 #cls <- paletteMartin
 
-plot(hnew,crps_horiz5a,xlab="Lead Time",ylab="predicted CRPS",
-     ylim=h4range,type='l',lwd=1,lty=2)
+plot(hnew,crps_horiz5a,xlab="Lead Time",ylab="CRPS",
+     ylim=h4range,type='l',lwd=1,lty=2,bty="n")
 for(i in seq_along(mtype)){
-    lines(hnew,crps_horiz4[[i]],col=cls[i],lwd=3)
+    lines(hnew,crps_horiz4[[i]],col=classCls[i],lwd=3)
 }
-legend("topleft",col=cls[seq_along(mtype)],lwd = 3, lty=1, legend = mname,cex=0.75,ncol=3)
+legend("topleft",col=classCls,lwd = 3, lty=1, legend = mname,cex=0.75,ncol=3,bty="n")
 
-#HORIZON: Relative error
+#HORIZON: Relative error 
 plot(hnew,crps_horiz5a/crps_horiz5a[1],xlab="Lead Time",ylab="relative CRPS",
-     ylim=c(0.75,2),type='l',lwd=1,lty=2)
+     ylim=c(0.75,2),type='l',lwd=3,lty=2,bty="n")
 for(i in seq_along(mtype)){
   if(mtype[i] == "NANA") next
   y = crps_horiz4[[i]]
-  lines(hnew,y/y[1],col=cls[i],lwd=3)
+  lines(hnew,y/y[1],col=classCls[i],lwd=3)
 }
-legend("topleft",col=cls[seq_along(mtype)],lwd = 3, lty=1, legend = mname,cex=0.75,ncol=3)
+legend("topleft",col=classCls,lwd = 3, lty=1, legend = mname,cex=0.75,ncol=3,bty="n")
 
-#HORIZON: delCRPS
+#HORIZON: delCRPS (include)
 plot(hnew,crps_horiz5a-crps_horiz5a[1],xlab="Lead Time",ylab="delCRPS",
-     ylim=c(-0.005,0.025),type='l',lwd=1,lty=2)
+     ylim=c(-0.005,0.025),type='l',lwd=3,lty=2,bty="n")
 for(i in seq_along(mtype)){
   y = crps_horiz4[[i]]
-  lines(hnew,y-y[1],col=cls[i],lwd=3)
+  lines(hnew,y-y[1],col=classCls[i],lwd=3)
 }
-legend("topleft",col=cls[seq_along(mtype)],lwd = 3, lty=1, legend = mname,cex=0.75,ncol=3)
+legend("topleft",col=classCls,lwd = 3, lty=1, legend = mname,cex=0.75,ncol=3,bty="n")
 
-## phenoDate plot
+## phenoDate plot 
 pD_mtype <- gcc_forecast_subset2 %>%  group_by(class) %>%
   summarise(min = min(phenoDate,na.rm = TRUE), max=max(phenoDate,na.rm = TRUE))
 pD_mtype$min[pD_mtype$min < -80] = -80 ## standardize start date
@@ -1106,25 +1125,22 @@ for(i in seq_along(mtype)){
     crps_pD4[[i]] <- predict(fit4[[i]],data.frame(horizon=1,phenoDate=pDnew4[[i]]))
 }
 
-plot(-80:40,crps_pD5a,xlab="Days from 15%",ylab="predicted CRPS",
-     ylim=h5range,type='l',lwd=1,lty=2,xlim=c(-80,40))
+plot(-80:40,crps_pD5a,xlab="Days from 15%",ylab="predicted CRPS",type='l',lwd=1,lty=2,xlim=c(-80,40),bty="n",ylim=c(-0.02,0.06)) #Exclude
 for(i in seq_along(mtype)){
-    lines(pDnew4[[i]],crps_pD4[[i]],col=cls[i],lwd=3)
+    lines(pDnew4[[i]],crps_pD4[[i]],col=classCls[i],lwd=3)
 }
 abline(v=0,lty=2)
-legend("topleft",col=cls[seq_along(mtype)],lwd = 2, lty=1, legend = mname,cex=0.5,ncol=3)
+legend("topleft",col=cls[seq_along(mtype)],lwd = 2, lty=1, legend = mname,cex=1,ncol=3,bty="n")
 
-# phenodate: delCRPS
+# phenodate: delCRPS (include)
 plot(-80:40,crps_pD5a-crps_pD5a[1],xlab="Days from 15%",ylab="delCRPS",
-     ylim=h5range,type='l',lwd=1,lty=2,xlim=c(-80,40))
+     ylim=h5range,type='l',lwd=1,lty=2,xlim=c(-80,40),bty="n")
 for(i in seq_along(mtype)){
     y = crps_pD4[[i]]
-    lines(pDnew4[[i]],y-y[1],col=cls[i],lwd=3)
+    lines(pDnew4[[i]],y-y[1],col=classCls[i],lwd=3)
 }
 abline(v=0,lty=2)
-legend("topleft",col=cls[seq_along(mtype)],lwd = 3, lty=1, legend = mname,cex=0.75,ncol=3)
-
-
+legend("topleft",col=classCls,lwd = 3, lty=1, legend = mname,cex=1,ncol=3,bty="n")
 
 
 ```
@@ -1135,28 +1151,32 @@ legend("topleft",col=cls[seq_along(mtype)],lwd = 3, lty=1, legend = mname,cex=0.
 ### LEAD TIME
 
 ```{r}
-par(mfrow=c(4,1))
+jpeg(file="GAM_responseSurfaces.jpeg",width = 4, height = 8, units = "in",res=1000)
+layout(matrix(c(1,2,3,4,4),ncol=1,byrow=TRUE))
+par(mai=c(0.6,0.6,0.3,0.5))
+
 ## OVERALL
-plot(hnew,crps_horiz,xlab="Horizon",ylab="predicted CRPS",type="l",lwd=3)
+plot(hnew,crps_horiz,xlab="",ylab="Predicted CRPS",type="l",lwd=3,bty="n",xaxt="n",main="a)")
+axis(1, at=seq(0,35,5),labels=rep("",8))
 
 ## MODEL TYPE: CRPS
-plot(hnew,crps_horiz5a,xlab="Lead Time",ylab="predicted CRPS",
-     ylim=h4range,type='l',lwd=1,lty=2)
+plot(hnew,crps_horiz5a,xlab="",ylab="Predicted CRPS",
+     ylim=c(0,0.07),type='l',lwd=1,lty=2,bty="n",xaxt="n",main="b)")
 for(i in seq_along(mtype)){
-    lines(hnew,crps_horiz4[[i]],col=cls[i],lwd=3)
+    lines(hnew,crps_horiz4[[i]],col=classCls[i],lwd=3)
 }
-legend("topleft",col=cls[seq_along(mtype)],lwd = 3, lty=1, legend = mname,cex=0.75,ncol=3)
-
+axis(1, at=seq(0,35,5),labels=rep("",8))
 
 #MODEL TYPE: delCRPS
-plot(hnew,crps_horiz5a-crps_horiz5a[1],xlab="Lead Time",ylab="delCRPS",
-     ylim=c(-0.005,0.025),type='l',lwd=1,lty=2)
+plot(hnew,crps_horiz5a-crps_horiz5a[1],xlab="",ylab=expression(paste(Delta, "CRPS")),
+     ylim=c(-0.005,0.03),type='l',lwd=1,lty=2,bty="n",xaxt="n",main="c)")
+axis(1, at=seq(0,35,5),labels=rep("",8))
 for(i in seq_along(mtype)){
   y = crps_horiz4[[i]]
-  lines(hnew,y-y[1],col=cls[i],lwd=3)
+  lines(hnew,y-y[1],col=classCls[i],lwd=3)
 }
-legend("topleft",col=cls[seq_along(mtype)],lwd = 3, lty=1, legend = mname,cex=0.75,ncol=3)
-
+legend("topleft",col=classCls,lwd = 3, lty=1, legend = mname,cex=1,ncol=3,bty="n")
+# legend("topleft",col=cls[seq_along(mtype)],lwd = 3, lty=1, legend = mname,cex=0.75,ncol=3)
 
 ## MODEL
 # plot(hnew,crps_horiz5a,xlab="Lead Time",ylab="predicted CRPS",
@@ -1168,13 +1188,14 @@ legend("topleft",col=cls[seq_along(mtype)],lwd = 3, lty=1, legend = mname,cex=0.
 # legend("topleft",col=cls,lwd = 2, lty=1, legend = teams[toPlot5],cex=0.5,ncol=3)
 
 #MODEL: delCRPS
-plot(hnew,crps_horiz5a-crps_horiz5a[1],xlab="Lead Time",ylab="delCRPS",
-     ylim=c(-0.005,0.025),type='l',lwd=1,lty=2)
+plot(hnew,crps_horiz5a-crps_horiz5a[1],xlab="Lead Time",ylab=expression(paste(Delta, "CRPS")),
+     ylim=c(-0.02,0.05),type='l',lwd=1,lty=2,bty="n",main="d)")
 for(i in seq_along(toPlot5)){
   y = crps_horiz5[[toPlot5[i]]]
-  lines(hnew,y-y[1],col=cls[i],lwd=3)
+  lines(hnew,y-y[1],col=cls[toPlot5[i]],lwd=3)
 }
-legend("topleft",col=cls,lwd = 2, lty=1, legend = teams[toPlot5],cex=0.5,ncol=3)
+legend("topleft",col=cls[toPlot5],lwd = 2, lty=1, legend = teams[toPlot5],cex=0.75,ncol=3,bty="n")
+dev.off()
 
 ```
 
