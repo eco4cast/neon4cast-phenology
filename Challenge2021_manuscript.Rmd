@@ -763,14 +763,26 @@ summary(fit3)
 
 Overall GAM: site, team, horizon, phenoDate
 ```{r, echo=FALSE}
+## overall model
 fit2 <- mgcv::gam(crps ~ siteID + s(horizon) + team + s(phenoDate),
             data = gcc_forecast_subset2,
             method="REML")
 summary(fit2)
+
+## model with interactions
 fit2i <- mgcv::gam(crps ~ siteID  + team + siteID*team + s(horizon)+ s(phenoDate),
             data = gcc_forecast_subset2,
             method="REML")
 summary(fit2i)
+
+## fit by class instead of team
+fit4a <- mgcv::gam(crps ~ siteID + class + s(horizon) + s(phenoDate),
+           data = gcc_forecast_subset2,
+           method="REML")
+summary(fit4a)
+classEffect = data.frame(class=c("static","covariate","dynamic"),
+                         mu=coef(fit4a)[c("classFALSEFALSE","classTRUEFALSE","classTRUETRUE")])
+
 
 ## team effect
 beta = summary(fit2)$p.table
@@ -778,6 +790,7 @@ beta.team = as.data.frame(beta[grepl("team",row.names(beta)),]) %>%
   mutate(team = sub("team","",rownames(.))) %>% left_join(y=meta,by="team") %>% arrange(Estimate)
 colnames(beta.team)[2] <- "SE"
 beta.team$team = reorder(beta.team$team,beta.team$Estimate)
+beta.team$class = recode(beta.team$class, TRUETRUE = "dynamic", FALSEFALSE = "static",FALSETRUE="persist",TRUEFALSE="covariate")
 ```
 
 
@@ -788,12 +801,23 @@ ggplot(beta.team) +
             alpha=0.75) +
  geom_errorbar( aes(x=team, ymin=Estimate-1.96*SE, ymax=Estimate+1.96*SE), width=0.4, colour="orange", alpha=0.9, size=1.3) +
   coord_flip() + ylab("CRPS(model) - CRPS(clim)") +
-  theme(legend.position = c(0.8, 0.2)) +
+  theme(legend.position = c(0.85, 0.2)) +
+#  geom_hline(aes(yintercept = mu, 
+#                 colour = class,
+#                 size=0.5,alpha=0.75),
+#             data=classEffect,
+#             show.legend = FALSE) +
+  geom_hline(yintercept = classEffect$mu[1],size=1,
+             colour=RColorBrewer::brewer.pal(4,"Dark2")[4]) +
+  geom_hline(yintercept = classEffect$mu[2],size=1
+             ,colour=RColorBrewer::brewer.pal(4,"Dark2")[1]) +
+  geom_hline(yintercept = classEffect$mu[3],size=1
+             ,colour=RColorBrewer::brewer.pal(4,"Dark2")[2]) +
   scale_fill_brewer(palette="Dark2")
-
-## TODO: legend, put in multi-panel
+## TODO: put in multi-panel
 ```
 
+## Site Effect
 ```{r}
 ## site effect
 beta.site = as.data.frame(rbind(beta[1,],beta[grepl("site",row.names(beta)),])) %>% mutate(site=rownames(.)) 
@@ -817,9 +841,10 @@ ggplot(beta.site) +
   geom_errorbar( aes(x=site, ymin=Estimate-1.96*SE, ymax=Estimate+1.96*SE), width=0.4, colour="orange", alpha=0.9, size=1.3) +
   coord_flip() + ylab("CRPS")
 ## TODO: RUN LM vs LAT; ORDER BY LAT OR GREENUP DATE (whichever is more significant), put in multi-panel; Color = usage elsewhere
-
+```
 
 ## site by team interactions
+```{r}
 alpha = as.data.frame(summary(fit2i)$p.table) %>% mutate(lab = rownames(.)) %>% separate(lab,c("site","team"),sep = ":")  ## grab summary table
 #recode primary effects
 noteam <- which(is.na(alpha$team) & grepl("site",alpha$site))
@@ -854,7 +879,10 @@ ggplot(alpha) + aes(x=team, y=Estimate,fill=site) +
 #  geom_errorbar( aes(x=team, ymin=Estimate-1.96*SE, ymax=Estimate+1.96*SE), width=0.4, colour="orange", alpha=0.9, position="dodge") +
   coord_flip() + ylab("CRPS")
 ## TODO: consistent site color scheme
+```
 
+
+```{r}
 ## Lead time plots
 hnew <- 1:35
 crps_horiz <- predict(fit2,data.frame(horizon=hnew,siteID="HARV",team="EFInull",phenoDate=0))
@@ -1128,27 +1156,31 @@ legend("topleft",col=cls[seq_along(mtype)],lwd = 3, lty=1, legend = mname,cex=0.
 ### LEAD TIME
 
 ```{r}
-par(mfrow=c(4,1))
+#, fig.asp=1.86,out.width="50%"
+#par(mfrow=c(3,1))
+cex = 1
 ## OVERALL
-plot(hnew,crps_horiz,xlab="Horizon",ylab="predicted CRPS",type="l",lwd=3)
+#plot(hnew,crps_horiz5a,xlab="Horizon",ylab="predicted CRPS",type="l",lwd=3)
+cls2 = c("black",RColorBrewer::brewer.pal(5,"Dark2"))[c(1,3,4,6,2,5)]
 
 ## MODEL TYPE: CRPS
-plot(hnew,crps_horiz5a,xlab="Lead Time",ylab="predicted CRPS",
-     ylim=h4range,type='l',lwd=1,lty=2)
+plot(hnew,crps_horiz5a,xlab="Lead Time (days)",ylab="CRPS",
+     ylim=h4range,type='l',lwd=5,lty=1)
 for(i in seq_along(mtype)){
-    lines(hnew,crps_horiz4[[i]],col=cls[i],lwd=3)
+    lines(hnew,crps_horiz4[[i]],col=cls2[i+1],lwd=3)
 }
-legend("topleft",col=cls[seq_along(mtype)],lwd = 3, lty=1, legend = mname,cex=0.75,ncol=3)
+legend("topleft",col=c(1,cls2[seq_along(mtype)+1]),lwd = 3, lty=1, legend = c("all",mname),cex=cex,ncol=3)
 
 
 #MODEL TYPE: delCRPS
-plot(hnew,crps_horiz5a-crps_horiz5a[1],xlab="Lead Time",ylab="delCRPS",
-     ylim=c(-0.005,0.025),type='l',lwd=1,lty=2)
+plot(hnew,crps_horiz5a-crps_horiz5a[1],
+     xlab="Lead Time (days)",ylab=expression(paste(Delta,"CRPS")),
+     ylim=c(-0.005,0.025),type='l',lwd=5,lty=2)
 for(i in seq_along(mtype)){
   y = crps_horiz4[[i]]
-  lines(hnew,y-y[1],col=cls[i],lwd=3)
+  lines(hnew,y-y[1],col=cls2[i+1],lwd=3)
 }
-legend("topleft",col=cls[seq_along(mtype)],lwd = 3, lty=1, legend = mname,cex=0.75,ncol=3)
+legend("topleft",col=c(1,cls2[seq_along(mtype)+1]),lwd = 3, lty=1, legend = c("all",mname),cex=cex,ncol=3)
 
 
 ## MODEL
@@ -1161,15 +1193,64 @@ legend("topleft",col=cls[seq_along(mtype)],lwd = 3, lty=1, legend = mname,cex=0.
 # legend("topleft",col=cls,lwd = 2, lty=1, legend = teams[toPlot5],cex=0.5,ncol=3)
 
 #MODEL: delCRPS
-plot(hnew,crps_horiz5a-crps_horiz5a[1],xlab="Lead Time",ylab="delCRPS",
-     ylim=c(-0.005,0.025),type='l',lwd=1,lty=2)
+plot(hnew,crps_horiz5a-crps_horiz5a[1],
+     xlab="Lead Time (days)",ylab=expression(paste(Delta,"CRPS")),
+     ylim=c(-0.005,0.025),type='l',lwd=5,lty=1)
 for(i in seq_along(toPlot5)){
   y = crps_horiz5[[toPlot5[i]]]
   lines(hnew,y-y[1],col=cls[i],lwd=3)
 }
-legend("topleft",col=cls,lwd = 2, lty=1, legend = teams[toPlot5],cex=0.5,ncol=3)
+legend("topleft",col=c(1,cls),lwd = 2, lty=1, legend = c("all",teams[toPlot5]),cex=cex*0.6,ncol=3)
 
 ```
+
+## Phenodate
+
+```{r}
+crps_pD5 <- list()
+pDnew <- list()
+for(i in toPlot5){
+    j = which(pD_team$team == names(fit5)[i])
+    pDnew[[i]] <- pD_team$min[j]:pD_team$max[j]
+    crps_pD5[[i]] <- predict(fit5[[i]],data.frame(horizon=1,phenoDate=pDnew[[i]]))
+}
+crps_pD5a <- predict(fit5a,data.frame(horizon=1,phenoDate=-80:40))
+
+plot(-80:40,crps_pD5a,xlab="Days from 15% greenup",ylab="CRPS",
+     ylim=c(-0.0012,0.044),type='n',lwd=5,xlim=c(-80,40))
+for(i in seq_along(toPlot5)){
+    lines(pDnew[[toPlot5[i]]],crps_pD5[[toPlot5[i]]],col=cls[i],lwd=3)
+}
+lines(-80:40,crps_pD5a,lwd=5) ## overall model on top
+abline(v=0,lty=2)
+legend("topleft",col=c(1,cls),lwd = 2, lty=1, 
+       legend = c("all",teams[toPlot5]),cex=0.5,ncol=3)
+
+## phenoDate by CLASS
+pD_mtype <- gcc_forecast_subset2 %>%  group_by(class) %>%
+  summarise(min = min(phenoDate,na.rm = TRUE), max=max(phenoDate,na.rm = TRUE))
+pD_mtype$min[pD_mtype$min < -80] = -80 ## standardize start date
+crps_pD4 <- list()
+pDnew4 <- list()
+for(i in seq_along(mtype)){
+    pDnew4[[i]] <- pD_mtype$min[i]:pD_mtype$max[i]
+    crps_pD4[[i]] <- predict(fit4[[i]],data.frame(horizon=1,phenoDate=pDnew4[[i]]))
+}
+names(fit4)
+sapply(crps_pD4,which.max) + sapply(pDnew4,min)
+which.max(crps_pD5a)-80
+
+plot(-80:40,crps_pD5a-crps_pD5a[1],xlab="Days from 15% greenup",ylab=expression(paste(Delta,"CRPS")),
+     type='l',lwd=5,xlim=c(-80,40),ylim=c(-0.0012,0.043))
+for(i in seq_along(mtype)){
+    y = crps_pD4[[i]]
+    lines(pDnew4[[i]],y-y[1],col=cls2[i+1],lwd=3)
+}
+abline(v=0,lty=2)
+legend("topleft",col=c(1,cls2[seq_along(mtype)+1]),lwd = 3, lty=1, 
+       legend = c("all",mname),cex=0.75,ncol=3)
+```
+
 
 
 Comment from Luke: Another open Q is how we will deal with variability in predictive performance across sites. Perhaps one’s fixed effects lead to great performance at site A, but very poor (e.g., strongly biased) performance at site B.
