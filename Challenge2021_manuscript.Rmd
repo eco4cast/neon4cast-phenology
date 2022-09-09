@@ -577,6 +577,31 @@ for(s in 1:n_sites){
   site3 <- siteALL[lubridate::date(siteALL$time)==(as.Date("2020-12-31")+as.numeric(allTransitionDys[allTransitionDys$siteID==selectedSite,4])),]
   
   allMeans[s,1] <- selectedSite
+  allMeans[s,2] <- paste(round((mean(site1$crps,na.rm=TRUE)),digits=3),"+/-",round((sd(site1$crps,na.rm=TRUE)),digits=3))
+  allMeans[s,3] <- paste(round((mean(site2$crps,na.rm=TRUE)),digits=3),"+/-",round((sd(site2$crps,na.rm=TRUE)),digits=3))
+  allMeans[s,4] <- paste(round((mean(site3$crps,na.rm=TRUE)),digits=3),"+/-",round((sd(site3$crps,na.rm=TRUE)),digits=3))
+  
+  allMeans[s,5] <- round(subset(site1,team=="climatology")$crps[1],digits=3)
+  allMeans[s,6] <- round(subset(site2,team=="climatology")$crps[1],digits=3)
+  allMeans[s,7] <- round(subset(site3,team=="climatology")$crps[1],digits=3)
+  allMeans[s,8] <- round(mean(as.numeric(allMeans[s,5:7])),digits=3)
+}
+allMeans <- allMeans[order(allMeans[,8]),]
+colnames(allMeans) <- c("siteID","15_avg","50_avg","85_avg","15_clim","50_clim","85_clim","avg_clim")
+write.csv(allMeans,file=paste0(figureDirectory,"averageAndClimCRPSvaluesTransitions.csv"),row.names = FALSE,quote=FALSE)
+
+#Redo without pasting standard deviation
+allMeans <- matrix(nrow=n_sites,ncol=8)
+allTransitionDys <- allTransitions[,c('siteID','day15','day50','day85')]
+for(s in 1:n_sites){
+  selectedSite <- site_names[s]
+  siteALL <- gcc_forecast_subset[gcc_forecast_subset$siteID==selectedSite,]
+  
+  site1 <- siteALL[lubridate::date(siteALL$time)==(as.Date("2020-12-31")+as.numeric(allTransitionDys[allTransitionDys$siteID==selectedSite,2])),]
+  site2 <- siteALL[lubridate::date(siteALL$time)==(as.Date("2020-12-31")+as.numeric(allTransitionDys[allTransitionDys$siteID==selectedSite,3])),]
+  site3 <- siteALL[lubridate::date(siteALL$time)==(as.Date("2020-12-31")+as.numeric(allTransitionDys[allTransitionDys$siteID==selectedSite,4])),]
+  
+  allMeans[s,1] <- selectedSite
   allMeans[s,2] <- round((mean(site1$crps,na.rm=TRUE)),digits=3)
   allMeans[s,3] <- round((mean(site2$crps,na.rm=TRUE)),digits=3)
   allMeans[s,4] <- round((mean(site3$crps,na.rm=TRUE)),digits=3)
@@ -586,9 +611,25 @@ for(s in 1:n_sites){
   allMeans[s,7] <- round(subset(site3,team=="climatology")$crps[1],digits=3)
   allMeans[s,8] <- round(mean(as.numeric(allMeans[s,5:7])),digits=3)
 }
-allMeans <- allMeans[order(allMeans[,8]),]
+allMeans <- as.data.frame(allMeans)
 colnames(allMeans) <- c("siteID","15_avg","50_avg","85_avg","15_clim","50_clim","85_clim","avg_clim")
-write.csv(allMeans,file="averageAndClimCRPSvaluesTransitions.csv",row.names = FALSE,quote=FALSE)
+
+mdl <- lm(as.numeric(as.character(allMeans$avg_clim))~as.numeric(as.character(allTransitionDys$day50)))
+plot(as.numeric(as.character(allTransitionDys$day50)),as.numeric(as.character(allMeans$avg_clim)))
+abline(mdl)
+summary(mdl)
+siteLats <- c(42.537,44.0639,38.893,45.509,39.040,35.689,32.542,33.401)
+siteMATs <- c(7.15,6.1,11.8,4.95,12.65,12.65,17.9,17.65)
+
+mdl <- lm(as.numeric(as.character(allMeans$avg_clim))~siteLats)
+plot(siteLats,as.numeric(as.character(allMeans$avg_clim)))
+abline(mdl)
+summary(mdl)
+
+mdl <- lm(as.numeric(as.character(allMeans$avg_clim))~siteMATs)
+plot(siteMATs,as.numeric(as.character(allMeans$avg_clim)))
+abline(mdl)
+summary(mdl)
 
 ```
 
