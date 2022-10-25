@@ -45,6 +45,10 @@ site_full_names <- c("Harvard","Bartlett","Smithsonian",
                      "Dead Lake","Lyndon B. Johnson")
 site_full_names <- setNames(site_full_names,site_names)
 n_sites <- length(site_names)
+siteLats <- c(42.537,44.0639,38.893,45.509,39.040,35.689,32.542,33.401)
+siteMATs <- c(7.15,6.1,11.8,4.95,12.65,12.65,17.9,17.65)
+siteLongs <- c(-72.173,-71.287,-78.140,-89.586,-95.192,-83.502,
+               -87.804,-97.570)
 
 classCls <- c("#1b9e77","#d95f02","#7570b3","#e7298a","#FF0010")
 classCls <- setNames(classCls,c("covariate","dynamic","persist","static","clim"))
@@ -53,6 +57,29 @@ if(!dir.exists(figureDirectory)){
   dir.create(figureDirectory)
 }
 ```
+
+##Site Location Map with NPN Spring Anomaly. To grab the si-x_leaf_anomaly_historic.tif file of the Historical Annual Spring Indices Anomaly (2021), First Leaf - Spring Index go to https://www.usanpn.org/geoserver-request-builder and select the WCS service type and GeoTiff formats. 
+```{r,eval=FALSE}
+library(raster)
+library(rgdal)
+library(RColorBrewer)
+
+NPN_anomaly <- raster('si-x_leaf_anomaly_historic.tif')
+siteData <- as.data.frame(cbind(siteLats,siteLongs))
+colnames(siteData) <- c("Latitude","Longitude")
+coordinates(siteData) <- c("Longitude","Latitude")
+
+proj4string(siteData) <- CRS("+proj=longlat +ellps=GRS80 +datum=NAD83")
+
+jpeg(file=paste0(figureDirectory,"siteMap_withAnomaly.jpg"),height=5,width=7,units="in",res=1000)
+plot(NPN_anomaly,col=brewer.pal(10,'RdYlGn'),bty="n")
+#points(siteData, pch=16, col="red", cex=1)
+points(siteData, col="black", pch=20)
+text(siteData,labels=site_names,pos=2,offset=0.3)
+dev.off()
+
+```
+
 
 ##Grab Forecasts and Organize Data
 Forecasts can either be downloaded from:
@@ -657,8 +684,6 @@ mdl <- lm(as.numeric(as.character(allMeans$avg_clim))~as.numeric(as.character(al
 plot(as.numeric(as.character(allTransitionDys$day50)),as.numeric(as.character(allMeans$avg_clim)))
 abline(mdl)
 summary(mdl)
-siteLats <- c(42.537,44.0639,38.893,45.509,39.040,35.689,32.542,33.401)
-siteMATs <- c(7.15,6.1,11.8,4.95,12.65,12.65,17.9,17.65)
 
 mdl <- lm(as.numeric(as.character(allMeans$avg_clim))~siteLats)
 plot(siteLats,as.numeric(as.character(allMeans$avg_clim)))
