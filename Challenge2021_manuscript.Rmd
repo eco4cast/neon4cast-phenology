@@ -856,7 +856,8 @@ gcc_forecast_subset2 <- gcc_forecast_subset3 %>%
   mutate(day85 = allTransitions$day85[matchSite],
          day50 = allTransitions$day50[matchSite],
          day15 = allTransitions$day15[matchSite],
-         phenoDate = lubridate::yday(start_time) - day15)
+         phenoDate = lubridate::yday(start_time) - day15,
+         phenoDate_time = lubridate::yday(time) - day15)
 
 #phenoDate is the number of days after the 15% green-up date
 ```
@@ -879,9 +880,13 @@ meta <- meta %>% mutate(team=replace(team,team=="DOY_Mean"," DOY_Mean")) #Need D
 
 fit2 <- mgcv::gam(crps ~ siteID + s(horizon) + team + s(phenoDate),
             data = gcc_forecast_subset2,
-            method="REML")
+            method="REML") #PhenoDate being the date of submission
 
 summary(fit2)
+
+fit2_time <- mgcv::gam(crps ~ siteID + s(horizon) + team + s(phenoDate_time),
+            data = gcc_forecast_subset2,
+            method="REML") #PhenoDate being the forecasted date
 
 ## model with interactions
 fit2i <- mgcv::gam(crps ~ siteID  + team + siteID*team + s(horizon)+ s(phenoDate),
@@ -905,6 +910,7 @@ beta.team = as.data.frame(beta[grepl("team",row.names(beta)),]) %>%
 colnames(beta.team)[2] <- "SE"
 beta.team$team = reorder(beta.team$team,beta.team$Estimate)
 beta.team$class = recode(beta.team$class, TRUETRUE = "dynamic", FALSEFALSE = "static",FALSETRUE="persist",TRUEFALSE="covariate")
+
 ```
 
 
@@ -1015,31 +1021,36 @@ pDnew2 <- -80:40
 crps_pD <- predict(fit2,data.frame(horizon=1,siteID="HARV",team="Persistence",phenoDate=pDnew2))
 plot(pDnew2,crps_pD,xlab="Days from 15%",ylab="predicted CRPS",lwd=3,type='l')
 abline(v=0,lty=2)
-print(paste("We are worst at predicting:",pDnew2[which.max(crps_pD)],"days before 15% green-up"))
+print(paste("We are worst when forecasting on:",pDnew2[which.max(crps_pD)],"days after 15% green-up"))
+
+crps_pD_time <- predict(fit2_time,data.frame(horizon=1,siteID="HARV",team="Persistence",phenoDate_time=pDnew2))
+plot(pDnew2,crps_pD_time,xlab="Days from 15%",ylab="predicted CRPS",lwd=3,type='l')
+abline(v=0,lty=2)
+print(paste("We are worst at forecasting:",pDnew2[which.max(crps_pD_time)],"days after 15% green-up"))
 
 plotPredictability <- function(trans){
   matchSite <- match(gcc_forecast_subset$siteID, allTransitions$siteID)
   if(trans==0.50){
-    gcc_forecast_subset2 <- gcc_forecast_subset %>% 
+    gcc_forecast_subset4 <- gcc_forecast_subset %>% 
       mutate(day85 = allTransitions$day85[matchSite],
              day50 = allTransitions$day50[matchSite],
              day15 = allTransitions$day15[matchSite],
-             phenoDate = lubridate::yday(start_time) - day50)
+             phenoDate = lubridate::yday(time) - day50)
   }else if(trans==0.15){
-    gcc_forecast_subset2 <- gcc_forecast_subset %>% 
+    gcc_forecast_subset4 <- gcc_forecast_subset %>% 
       mutate(day85 = allTransitions$day85[matchSite],
              day50 = allTransitions$day50[matchSite],
              day15 = allTransitions$day15[matchSite],
-             phenoDate = lubridate::yday(start_time) - day15)
+             phenoDate = lubridate::yday(time) - day15)
   }else if(trans==0.85){
-    gcc_forecast_subset2 <- gcc_forecast_subset %>% 
+    gcc_forecast_subset4 <- gcc_forecast_subset %>% 
       mutate(day85 = allTransitions$day85[matchSite],
              day50 = allTransitions$day50[matchSite],
              day15 = allTransitions$day15[matchSite],
-             phenoDate = lubridate::yday(start_time) - day85)
+             phenoDate = lubridate::yday(time) - day85)
   }
   fit <- gam(crps ~ siteID + s(horizon) + team + s(phenoDate), 
-             data = gcc_forecast_subset2,
+             data = gcc_forecast_subset4,
              method="REML")
   
   pDnew <- -80:40
@@ -1195,6 +1206,25 @@ if(!file.exists("fit4.RDS")){
 }
 names(fit4) <- mtype
 lapply(fit4,summary)
+
+if(!file.exists("fit_time_site.RDS")){
+  fit_time_site <- list()
+  for(i in seq_along(site_names)){
+    print(i)
+    gcc_mtype <- gcc_forecast_subset2 %>% filter(siteID == site_names[i])
+    fit_time_site[[i]] <- try(mgcv::gam(crps ~ s(horizon) + s(phenoDate_time),
+                               data = gcc_mtype,
+                               method="REML"))
+    saveRDS(fit_time_site,file="fit_time_site.RDS")
+  }
+} else {
+  readRDS("fit_time_site.RDS")
+}
+names(fit4) <- mtype
+lapply(fit4,summary)
+
+names(fit_time_site) <- site_names
+lapply(fit_time_site,summary)
 
 ```
 
@@ -1383,6 +1413,45 @@ lines(-80:40,crps_pD5a,lwd=5) ## overall model on top
 abline(v=0,lty=2)
 legend("topleft",col=c(1,teamCls[toPlot5]),lwd = 2, lty=1, 
        legend = c("all",teams[toPlot5]),cex=1,ncol=3,bty="n")
+
+dev.off()
+```
+
+```{r}
+jpeg(file=paste0(figureDirectory,"GAM_time_bySite.jpeg"),width = 6, height = 5.5, units = "in",res=1000)
+#layout(matrix(c(1,1,2,2,2),ncol=1,byrow=TRUE))
+par(mai=c(0.7,0.8,0.3,1),mfrow=c(2,1))
+## phenoDate by CLASS
+pD_mtype <- gcc_forecast_subset2 %>%  group_by(siteID) %>%
+  summarise(min = min(phenoDate_time,na.rm = TRUE), max=max(phenoDate_time,na.rm = TRUE))
+pD_mtype$min[pD_mtype$min < -80] = -80 ## standardize start date
+crps_pD4 <- list()
+pDnew4 <- list()
+
+fit5a_time <- mgcv::gam(crps ~ s(horizon) + s(phenoDate_time),
+            data = gcc_forecast_subset2,
+            method="REML")
+crps_pD5a <- predict(fit5a_time,data.frame(horizon=1,phenoDate_time=-80:40))
+
+for(i in seq_along(site_names)){
+    pDnew4[[i]] <- pD_mtype$min[i]:pD_mtype$max[i]
+    crps_pD4[[i]] <- predict(fit_time_site[[i]],data.frame(horizon=1,phenoDate_time=pDnew4[[i]]))
+}
+sapply(crps_pD4,which.max) + sapply(pDnew4,min)
+which.max(crps_pD5a)-80
+
+#By Site
+plot(-80:40,crps_pD5a-crps_pD5a[1],xlab="",ylab=expression(paste(Delta,"CRPS")),
+     type='l',lwd=5,xlim=c(-80,40),ylim=c(-0.0012,0.08),bty="n",main="",xaxt="n")
+title("a)", adj = 0)
+axis(1, at=seq(-80,40,20),labels=rep("",7))
+for(i in seq_along(site_names)){
+    y = crps_pD4[[i]]
+    lines(pDnew4[[i]],y-y[1],col=classCls[i],lwd=3)
+}
+abline(v=0,lty=2,lwd=1)
+legend("topleft",col=c(1,classCls[seq_along(mtype)]),lwd = 3, lty=1, 
+       legend = c("all",mname[1:4],"DOY_Mean"),cex=1,ncol=3,bty="n")
 
 dev.off()
 ```
