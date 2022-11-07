@@ -632,8 +632,10 @@ dev.off()
 
 ##Table 3: Average CRPS across all forecasts from all models and lead times. 
 ```{r}
-allMeans <- matrix(nrow=n_sites,ncol=8)
+allMeans <- matrix(nrow=0,ncol=4)
+allAnomalies <- matrix(nrow=0,ncol=4)
 allTransitionDys <- allTransitions[,c('siteID','day15','day50','day85')]
+meanTrans <- read.csv(file="historicalMeanTransitionDates.csv") #Created in calculatePhenoCamTransitionDates.R file
 for(s in 1:n_sites){
   selectedSite <- site_names[s]
   siteALL <- gcc_forecast_subset[gcc_forecast_subset$siteID==selectedSite,]
@@ -642,58 +644,61 @@ for(s in 1:n_sites){
   site2 <- siteALL[lubridate::date(siteALL$time)==(as.Date("2020-12-31")+as.numeric(allTransitionDys[allTransitionDys$siteID==selectedSite,3])),]
   site3 <- siteALL[lubridate::date(siteALL$time)==(as.Date("2020-12-31")+as.numeric(allTransitionDys[allTransitionDys$siteID==selectedSite,4])),]
   
-  allMeans[s,1] <- selectedSite
-  allMeans[s,2] <- paste(round((mean(site1$crps,na.rm=TRUE)),digits=3),"+/-",round((sd(site1$crps,na.rm=TRUE)),digits=3))
-  allMeans[s,3] <- paste(round((mean(site2$crps,na.rm=TRUE)),digits=3),"+/-",round((sd(site2$crps,na.rm=TRUE)),digits=3))
-  allMeans[s,4] <- paste(round((mean(site3$crps,na.rm=TRUE)),digits=3),"+/-",round((sd(site3$crps,na.rm=TRUE)),digits=3))
+  allMeans <- rbind(allMeans,c(selectedSite,'15%',round((mean(site1$crps,na.rm=TRUE)),digits=3),round((sd(site1$crps,na.rm=TRUE)),digits=3)))
+    allMeans <- rbind(allMeans,c(selectedSite,'50%',round((mean(site2$crps,na.rm=TRUE)),digits=3),round((sd(site2$crps,na.rm=TRUE)),digits=3)))
+    allMeans <- rbind(allMeans,c(selectedSite,'85%',round((mean(site3$crps,na.rm=TRUE)),digits=3),round((sd(site3$crps,na.rm=TRUE)),digits=3)))
   
-  allMeans[s,5] <- round(subset(site1,team=="DOY_Mean")$crps[1],digits=3)
-  allMeans[s,6] <- round(subset(site2,team=="DOY_Mean")$crps[1],digits=3)
-  allMeans[s,7] <- round(subset(site3,team=="DOY_Mean")$crps[1],digits=3)
-  allMeans[s,8] <- round(mean(as.numeric(allMeans[s,5:7])),digits=3)
+  #Add columns for the historical average day of year transition
+  allAnomalies <- rbind(allAnomalies,
+                        c(selectedSite,'15%',round((as.numeric(allTransitionDys[allTransitionDys$siteID==selectedSite,2])-
+                                 meanTrans[meanTrans$siteID==selectedSite,'day15']),digits=3),
+                          round(meanTrans[meanTrans$siteID==selectedSite,'sd15'],digits=3)))
+  
+    allAnomalies <- rbind(allAnomalies,
+                        c(selectedSite,'50%',round((as.numeric(allTransitionDys[allTransitionDys$siteID==selectedSite,3])-
+                                 meanTrans[meanTrans$siteID==selectedSite,'day50']),digits=3),
+                          round(meanTrans[meanTrans$siteID==selectedSite,'sd50'],digits=3)))
+    
+      allAnomalies <- rbind(allAnomalies,
+                        c(selectedSite,'85%',round((as.numeric(allTransitionDys[allTransitionDys$siteID==selectedSite,4])-
+                                 meanTrans[meanTrans$siteID==selectedSite,'day85']),digits=3),
+                          round(meanTrans[meanTrans$siteID==selectedSite,'sd85'],digits=3)))
 }
-allMeans <- allMeans[order(allMeans[,8]),]
-colnames(allMeans) <- c("siteID","15_avg","50_avg","85_avg","15_clim","50_clim","85_clim","avg_clim")
-write.csv(allMeans,file=paste0(figureDirectory,"averageAndClimCRPSvaluesTransitions.csv"),row.names = FALSE,quote=FALSE)
 
-#Redo without pasting standard deviation
-allMeans <- matrix(nrow=n_sites,ncol=8)
-allTransitionDys <- allTransitions[,c('siteID','day15','day50','day85')]
-for(s in 1:n_sites){
-  selectedSite <- site_names[s]
-  siteALL <- gcc_forecast_subset[gcc_forecast_subset$siteID==selectedSite,]
-  
-  site1 <- siteALL[lubridate::date(siteALL$time)==(as.Date("2020-12-31")+as.numeric(allTransitionDys[allTransitionDys$siteID==selectedSite,2])),]
-  site2 <- siteALL[lubridate::date(siteALL$time)==(as.Date("2020-12-31")+as.numeric(allTransitionDys[allTransitionDys$siteID==selectedSite,3])),]
-  site3 <- siteALL[lubridate::date(siteALL$time)==(as.Date("2020-12-31")+as.numeric(allTransitionDys[allTransitionDys$siteID==selectedSite,4])),]
-  
-  allMeans[s,1] <- selectedSite
-  allMeans[s,2] <- round((mean(site1$crps,na.rm=TRUE)),digits=3)
-  allMeans[s,3] <- round((mean(site2$crps,na.rm=TRUE)),digits=3)
-  allMeans[s,4] <- round((mean(site3$crps,na.rm=TRUE)),digits=3)
-  
-  allMeans[s,5] <- round(subset(site1,team=="DOY_Mean")$crps[1],digits=3)
-  allMeans[s,6] <- round(subset(site2,team=="DOY_Mean")$crps[1],digits=3)
-  allMeans[s,7] <- round(subset(site3,team=="DOY_Mean")$crps[1],digits=3)
-  allMeans[s,8] <- round(mean(as.numeric(allMeans[s,5:7])),digits=3)
-}
-allMeans <- as.data.frame(allMeans)
-colnames(allMeans) <- c("siteID","15_avg","50_avg","85_avg","15_clim","50_clim","85_clim","avg_clim")
+allMeans <- data.frame(allMeans)
+colnames(allMeans) <- c("Site","Transition","CRPS","CRPS_SD")
+allMeans$CRPS <- as.numeric(allMeans$CRPS)
+allMeans$CRPS_SD <- as.numeric(allMeans$CRPS_SD)
+allMeans$siteFullName <- site_full_names[match(allMeans$Site,names(site_full_names))]
 
-mdl <- lm(as.numeric(as.character(allMeans$avg_clim))~as.numeric(as.character(allTransitionDys$day50)))
-plot(as.numeric(as.character(allTransitionDys$day50)),as.numeric(as.character(allMeans$avg_clim)))
-abline(mdl)
-summary(mdl)
+allAnomalies <- data.frame(allAnomalies)
+colnames(allAnomalies) <- c("Site","Transition","Anomaly","Anomaly_SD")
+allAnomalies$Anomaly <- as.numeric(allAnomalies$Anomaly)
+allAnomalies$Anomaly_SD <- as.numeric(allAnomalies$Anomaly_SD)
+allAnomalies$siteFullName <- site_full_names[match(allAnomalies$Site,names(site_full_names))]
 
-mdl <- lm(as.numeric(as.character(allMeans$avg_clim))~siteLats)
-plot(siteLats,as.numeric(as.character(allMeans$avg_clim)))
-abline(mdl)
-summary(mdl)
 
-mdl <- lm(as.numeric(as.character(allMeans$avg_clim))~siteMATs)
-plot(siteMATs,as.numeric(as.character(allMeans$avg_clim)))
-abline(mdl)
-summary(mdl)
+jpeg(file=paste0(figureDirectory,"averageCRPSvalues_transitionDates.jpeg"),width = 9, height = 5, units = "in",res=1000)
+
+ggplot(allMeans,aes(fill=Transition,y=CRPS,x=siteFullName))+
+  geom_bar(position=position_dodge(),stat="identity")+  
+  geom_errorbar(aes(ymin=CRPS-CRPS_SD,ymax=CRPS+CRPS_SD), width=0.4, colour="black", size=0.5,position=position_dodge(0.9))+
+  xlab("Site")+
+  theme_bw()
+
+dev.off()
+
+##Supplementary Figure
+jpeg(file=paste0(figureDirectory,"transitionDate_anomalies.jpeg"),width = 9, height = 5, units = "in",res=1000)
+
+ggplot(allAnomalies,aes(fill=Transition,y=Anomaly,x=siteFullName))+
+  geom_bar(position=position_dodge(),stat="identity")+  
+  geom_errorbar(aes(ymin=Anomaly- 1.000001 *Anomaly_SD,ymax=Anomaly+1.000001*Anomaly_SD), width=0.4, colour="black", size=0.5,position=position_dodge(0.9))+
+  ylab("Days After Historical Average")+
+  xlab("Site")+
+  theme_bw()
+
+dev.off()
 
 ```
 
@@ -946,11 +951,66 @@ bcov = vcov(fit2)[1:8,1:8]
 beta.site$Estimate[2:8] = beta.site$Estimate[2:8] + beta.site$Estimate[1] ## rescale mean
 beta.site$SE[2:8] = sqrt(beta.site$SE[2:8]^2 + beta.site$SE[1]^2 + 2*bcov[2:8,1]) ## rescale SE
 beta.site = beta.site %>% left_join(y=allTransitions,by=c("site"="siteID")) %>% arrange(day50)
+beta.site$anomaly15 <- NA
+beta.site$anomaly50 <- NA
+beta.site$anomaly85 <- NA
+
+for(s in 1:nrow(beta.site)){
+  beta.site$anomaly15[s] <- allAnomalies[(allAnomalies$Site==as.character(beta.site$site[s])&
+                               allAnomalies$Transition=="15%"),'Anomaly']
+  beta.site$anomaly50[s] <- allAnomalies[(allAnomalies$Site==as.character(beta.site$site[s])&
+                               allAnomalies$Transition=="50%"),'Anomaly']
+  beta.site$anomaly85[s] <- allAnomalies[(allAnomalies$Site==as.character(beta.site$site[s])&
+                               allAnomalies$Transition=="85%"),'Anomaly']
+}
+
+jpeg(file=paste0(figureDirectory,"sitePredictability_LinearRegressions.jpeg"),width = 7, height = 4, units = "in",res=1000)
+par(mai=c(0.6,0.6,0.1,0.1))
+par(mfrow=c(2,3))
+
+siteLM = lm(Estimate ~ day15,beta.site)
+plot(beta.site$day15,beta.site$Estimate,xlab="DOY of 15% Greenup",ylab="Site Predictability",pch=20)
+abline(siteLM)
+sm <- summary(siteLM)
+text(80,0.0078,paste('p-value:',round(sm$coefficients[2,4],digits=3)),pos=4)
+text(80,0.007,paste('R2:',round(sm$r.squared,digits=3)),pos=4)
 
 siteLM = lm(Estimate ~ day50,beta.site)
-plot(beta.site$day50,beta.site$Estimate)
+plot(beta.site$day50,beta.site$Estimate,xlab="DOY of 50% Greenup",ylab="",pch=20)
 abline(siteLM)
-summary(siteLM)
+sm <- summary(siteLM)
+text(87,0.0078,paste('p-value:',round(sm$coefficients[2,4],digits=3)),pos=4)
+text(87,0.007,paste('R2:',round(sm$r.squared,digits=3)),pos=4)
+
+siteLM = lm(Estimate ~ day85,beta.site)
+plot(beta.site$day85,beta.site$Estimate,xlab="DOY of 85% Greenup",ylab="",pch=20)
+abline(siteLM)
+sm <- summary(siteLM)
+text(93,0.0078,paste('p-value:',round(sm$coefficients[2,4],digits=3)),pos=4)
+text(93,0.007,paste('R2:',round(sm$r.squared,digits=3)),pos=4)
+
+siteLM = lm(Estimate ~ anomaly15,beta.site)
+plot(beta.site$anomaly15,beta.site$Estimate,xlab="DOY Anomaly of 15% Greenup",ylab="Site Predictability",pch=20)
+abline(siteLM)
+sm <- summary(siteLM)
+text(-6,0.004,paste('p-value:',round(sm$coefficients[2,4],digits=3)),pos=4)
+text(-6,0.0032,paste('R2:',round(sm$r.squared,digits=3)),pos=4)
+
+siteLM = lm(Estimate ~ anomaly50,beta.site)
+plot(beta.site$anomaly50,beta.site$Estimate,xlab="DOY Anomaly of 50% Greenup",ylab="",pch=20)
+abline(siteLM)
+sm <- summary(siteLM)
+text(-6,0.004,paste('p-value:',round(sm$coefficients[2,4],digits=3)),pos=4)
+text(-6,0.0032,paste('R2:',round(sm$r.squared,digits=3)),pos=4)
+
+siteLM = lm(Estimate ~ anomaly85,beta.site)
+plot(beta.site$anomaly85,beta.site$Estimate,xlab="DOY Anomaly of 85% Greenup",ylab="",pch=20)
+abline(siteLM)
+sm <- summary(siteLM)
+text(-6.5,0.004,paste('p-value:',round(sm$coefficients[2,4],digits=3)),pos=4)
+text(-6.5,0.0032,paste('R2:',round(sm$r.squared,digits=3)),pos=4)
+
+dev.off()
 
 beta.site$site = reorder(beta.site$site,beta.site$day50)
 beta.site$siteFullName <- site_full_names[match(beta.site$site,names(site_full_names))]
