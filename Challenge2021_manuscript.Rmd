@@ -16,11 +16,8 @@ library(tools)
 library(mgcv)
 library(ggridges)
 library(gridExtra)
+library(RColorBrewer)
 ```
-
-Intro, Methods, Discussion, etc will be developed in [Google Docs](https://docs.google.com/document/d/1LvdfX1qk6AJIgRetZRl9qLUt-1kTlWJv4ftUMm2NJzQ/edit?usp=sharing)
-
-Analyses and Results 
 
 ##General Variables
 ```{r}
@@ -36,13 +33,15 @@ cls[14] <- clsCopy[18]
 cls[18] <- clsCopy[14]
 cls[9] <- clsCopy[6]
 cls[6] <- clsCopy[9]
-#cls <- c("#004949","#000000","orange","cyan",paletteMartin)
 teamCls <- setNames(cls,teams)
 
 site_names <- c("HARV", "BART", "SCBI", "STEI", "UKFS", "GRSM", "DELA", "CLBJ")
 site_full_names <- c("Harvard","Bartlett","Smithsonian",
-                     "Steigerwaldt","Kansas","Great Smokies",
+                     "Steigerwaldt","U. Kansas","Great Smokies",
                      "Dead Lake","Lyndon B. Johnson")
+siteColors <- brewer.pal(name="Accent", n = 8)
+siteColors[4] <- "cyan"
+
 site_full_names <- setNames(site_full_names,site_names)
 n_sites <- length(site_names)
 siteLats <- c(42.537,44.0639,38.893,45.509,39.040,35.689,32.542,33.401)
@@ -80,7 +79,6 @@ dev.off()
 
 ```
 
-
 ##Grab Forecasts and Organize Data
 Forecasts can either be downloaded from:
 1) The google drive: gcc_forecast_subset_20220415.RData on  https://drive.google.com/drive/folders/10ckh3-PDtNzHnUyPTvUmTqARgdarl32f
@@ -88,7 +86,8 @@ or
 2) The Aws server, which requires a special compilation of the package arrow
 ```{r,echo=FALSE}
 if(file.exists('gcc_forecast_subset_20220415.RData')){
-  load('gcc_forecast_subset_20220415.RData') #Contains objects:
+  load('gcc_forecast_subset_20220415.RData') 
+  #Contains objects:
   ##allTransitions
   ##gcc_forecast_subset
   ##gcc_forecast_subset2
@@ -142,7 +141,7 @@ gcc_forecast_subset3 <- gcc_forecast_subset3 %>% mutate(team=replace(team,team==
 mutate(team=replace(team,team=="UCSC_P_EDM","GPEDM"))
 ```
 
-## Figure 1: The specific days that each modeling team forecasted (first plot) and the days that each team submitted forecasts on (second plot). The period where at least one site was between 15% and 85% greenup is indicated with green shading. 
+## Figure 2: The specific days that each modeling team forecasted (first plot) and the days that each team submitted forecasts on (second plot). The period where at least one site was between 15% and 85% greenup is indicated with green shading. 
 ```{r, echo=FALSE,fig.height=8, fig.width=6}
 tranDates <- as.Date(unlist(allTransitions[,2]),origin=as.Date("2020-12-31"))
 tranDates <- c(tranDates,as.Date(unlist(allTransitions[,8]),origin=as.Date("2020-12-31")))
@@ -238,7 +237,7 @@ ts %>%
 
 ```
 
-##Figure 2: Example of forecasted greenness values submitted by teams on 11 May 2021 (4 days before 15%) for Harvard Forest and Supplementary Figure S3: all sites
+##Figure 3: Example of forecasted greenness values submitted by teams on 11 May 2021 (4 days before 15%) for Harvard Forest and Supplementary Figure S3: all sites
 ```{r, echo=FALSE}
 ## Code from https://github.com/eco4cast/neon4cast/blob/main/notebook/multi_team_plot.R and edited by Kathryn
 
@@ -376,7 +375,7 @@ dev.off()
 
 #Lead Time Figures: 
 
-##Figure 3: Example of how teams' forecasts change as lead time decreases for two sites for 15%, 50%, and 85% thresholds, Figure 4: Statistics for changes to lead time, and supplementary
+##Figure S4 and extras not included: Example of how teams' forecasts change as lead time decreases for two sites for 15%, 50%, and 85% thresholds
 ```{r, echo=FALSE}
 ##pdf(file="ForecastedValuesOnTransitionDates_presentationFigures.pdf",height=5,width=12)
 
@@ -519,7 +518,7 @@ plotForecastedValuesOverTime <- function(all_site_number, gcc_forecast_subset,st
 }
   
 
-jpeg(file=paste0(figureDirectory,"forecastedValuesOfTransitionDates_rescaled.jpeg"),width = 9, height = 5, units = "in",res = 1000)
+jpeg(file=paste0(figureDirectory,"forecastedValuesOfTransitionDates_rescaled.jpeg"),width = 9, height = 5, units = "in",res = 1000) #Not included for simplicity
 plotForecastedValuesOverTime(all_site_number=c(8,2),gcc_forecast_subset=gcc_forecast_subset,statistic = "GCC", ylims = c(0,1), rescaled=TRUE,trans=c(2,8))
 dev.off()
 
@@ -527,21 +526,76 @@ jpeg(file=paste0(figureDirectory,"forecastedValuesOfTransitionDates.jpeg"),width
 plotForecastedValuesOverTime(all_site_number=c(8,2),gcc_forecast_subset=gcc_forecast_subset,statistic = "GCC", ylims=c(0.32,0.46),rescaled=FALSE,trans=c(2,8))
 dev.off()
 
-jpeg(file=paste0(figureDirectory,"CRPSvsLeadTimeTrans.jpeg"),width = 9, height = 5, units = "in",res = 1000)
-plotForecastedValuesOverTime(all_site_number=c(8,2),gcc_forecast_subset=gcc_forecast_subset,statistic = "CRPS", ylims=c(0,0.10),rescaled=FALSE,trans=c(2,8))
-dev.off()
-
-jpeg(file=paste0(figureDirectory,"BiasvsLeadTimeTrans.jpeg"),width = 9, height = 5, units = "in",res = 1000)
+jpeg(file=paste0(figureDirectory,"BiasvsLeadTimeTrans.jpeg"),width = 9, height = 5, units = "in",res = 1000) #Not included for simplicity
 plotForecastedValuesOverTime(all_site_number=c(6,2),gcc_forecast_subset=gcc_forecast_subset,statistic = "bias", ylims=c(-0.05,0.12),rescaled=FALSE)
 dev.off()
 
-jpeg(file=paste0(figureDirectory,"SDvsLeadTimeTrans.jpeg"),width = 9, height = 5, units = "in",res = 1000)
+jpeg(file=paste0(figureDirectory,"SDvsLeadTimeTrans.jpeg"),width = 9, height = 5, units = "in",res = 1000) #Not included for simplicity
 plotForecastedValuesOverTime(all_site_number=c(6,2),gcc_forecast_subset=gcc_forecast_subset,statistic = "sd", ylims=c(0,0.05),rescaled=FALSE)
 dev.off()
 
 ```
 
-##Figure 5. Calculate the lead times that each model and site performed better than climatology (lower CRPS) for different transition dates
+#Figure S5 CRPS examples over lead time
+```{r}
+jpeg(file=paste0(figureDirectory,"CRPSvsLeadTimeTrans.jpeg"),width = 9, height = 5, units = "in",res = 1000)
+ylims <- rbind(rbind(rbind(c(0,0.02),c(0,0.04)),c(0,0.03)),c(0,0.1))
+all_site_number=c(8,2)
+statistic = "CRPS"
+trans=c(2,8)
+
+layout(matrix(c(1,3,2,4,5,5),ncol=(length(trans)+1),byrow=FALSE))
+par(mai=c(0.4,0.5,0.2,0.1))
+
+finalTms <- character()
+plottedCls <- character()
+ct <- 1
+for(site_number in all_site_number){
+  sitDat <- gcc_forecast_subset[gcc_forecast_subset$siteID==site_names[site_number],]
+  for(t in trans){ #Loops over the transition dates
+    tranDate <- as.Date(unlist(allTransitions[site_number,t]),origin=as.Date("2020-12-31"))
+    cl <- 1
+    vl <- as.numeric(allTransitions[site_number,(t+1)])
+    sdVal <- allTransitions[site_number,(t+2)]
+    
+    plot(x=numeric(),y=numeric(),type="l",xlim=c(0,35),ylim=ylims[ct,],ylab="",xlab="",main="",bty="n",xaxt="n")
+    ct <- ct+1
+    if(site_number==all_site_number[1]){
+      axis(1, at=seq(0,35,5),labels=rep("",8))
+    }else if(site_number==all_site_number[2]){
+      axis(1, at=seq(0,35,5),labels=seq(0,35,5))
+    }
+    
+    for(tm in 1:n_teams){
+      tmSitDat <- sitDat[sitDat$team==teams[tm],] #Subset by team
+      allPlottedData <- matrix(nrow=length(site_names),ncol=35) #35 columns for the different forecast horizons 
+      tranDate <- as.Date(unlist(allTransitions[site_number,t]),origin=as.Date("2020-12-31"))
+      beforeDays <- seq(tranDate-34,tranDate,by="day")
+      organizedDat <- tmSitDat[as.Date(tmSitDat$time)==tranDate,] #Subset of the forecasts that forecasted the transition date 
+      if(nrow(organizedDat)>0){
+        if(t==8){
+          if(! as.character(teams[tm]) %in% finalTms){
+            finalTms <- c(finalTms,as.character(teams[tm]))
+            plottedCls <- c(plottedCls,cls[tm])
+          }
+        }
+        sitTmMax <- max(organizedDat$mean,na.rm=TRUE)
+        
+        leadTimes <- tranDate-as.Date(organizedDat$start_time)
+        computedStat <- organizedDat$crps
+        lines(leadTimes,computedStat,col=cls[tm],lwd=2)
+      }
+    }
+  }
+}
+plot(x=numeric(),y=numeric(),type="l",xlim=c(-35,0),ylim=c(0,1),ylab="",xlab="",main="",bty="n",xaxt="n",yaxt="n")
+legend("topleft",as.character(finalTms),col=plottedCls,lty=1,lwd=3,bty = "n")
+
+dev.off()
+```
+
+
+##Figure S6. Calculate the lead times that each model and site performed better than climatology (lower CRPS) for different transition dates
 ```{r}
 allForecastHorizons_clim <- matrix(nrow=0,ncol=4)
 
@@ -630,7 +684,7 @@ dev.off()
 
 ```
 
-##Table 3: Average CRPS across all forecasts from all models and lead times. 
+#Supplementary Figure S8 (DOY of transition date anomalies) and other tables/figures not included
 ```{r}
 allMeans <- matrix(nrow=0,ncol=4)
 allAnomalies <- matrix(nrow=0,ncol=4)
@@ -678,7 +732,7 @@ allAnomalies$Anomaly_SD <- as.numeric(allAnomalies$Anomaly_SD)
 allAnomalies$siteFullName <- site_full_names[match(allAnomalies$Site,names(site_full_names))]
 
 
-jpeg(file=paste0(figureDirectory,"averageCRPSvalues_transitionDates.jpeg"),width = 9, height = 5, units = "in",res=1000)
+jpeg(file=paste0(figureDirectory,"averageCRPSvalues_transitionDates.jpeg"),width = 9, height = 5, units = "in",res=1000) #Not included
 
 ggplot(allMeans,aes(fill=Transition,y=CRPS,x=siteFullName))+
   geom_bar(position=position_dodge(),stat="identity")+  
@@ -703,7 +757,7 @@ dev.off()
 ```
 
 
-## metadata processing for GAMs
+## Metadata processing for GAMs
 ```{r}
 if(!file.exists('gcc_forecast_subset_20220415.RData')){
 ## grab the names of all the EMLs
@@ -836,6 +890,7 @@ meta[c("PEG","greenbears_gams","greenbears_stl","EFInull","Fourier"),"drivers"] 
 meta[c("PEG_RFR","PEG_RFR0","PEG_RFR2","DALEC_SIP","PhenoPhriends","greenbears_par","VT_Ph_GDD","EFI_U_P","Team_MODIS","CU_Pheno"),"drivers"] = TRUE
 
 meta["VT_Ph_GDD","type"] = "statistical"
+meta["PEG","type"] <- "dynamic"
 
 meta$class <- paste0(meta$drivers,meta$initial_conditions)
 meta$team <- rownames(meta)
@@ -861,7 +916,8 @@ gcc_forecast_subset2 <- gcc_forecast_subset3 %>%
   mutate(day85 = allTransitions$day85[matchSite],
          day50 = allTransitions$day50[matchSite],
          day15 = allTransitions$day15[matchSite],
-         phenoDate = lubridate::yday(start_time) - day15)
+         phenoDate = lubridate::yday(start_time) - day15,
+         phenoDate_time = lubridate::yday(time) - day15)
 
 #phenoDate is the number of days after the 15% green-up date
 ```
@@ -884,9 +940,13 @@ meta <- meta %>% mutate(team=replace(team,team=="DOY_Mean"," DOY_Mean")) #Need D
 
 fit2 <- mgcv::gam(crps ~ siteID + s(horizon) + team + s(phenoDate),
             data = gcc_forecast_subset2,
-            method="REML")
+            method="REML") #PhenoDate being the date of submission
 
 summary(fit2)
+
+fit2_time <- mgcv::gam(crps ~ siteID + s(horizon) + team + s(phenoDate_time),
+            data = gcc_forecast_subset2,
+            method="REML") #PhenoDate being the forecasted date
 
 ## model with interactions
 fit2i <- mgcv::gam(crps ~ siteID  + team + siteID*team + s(horizon)+ s(phenoDate),
@@ -910,9 +970,11 @@ beta.team = as.data.frame(beta[grepl("team",row.names(beta)),]) %>%
 colnames(beta.team)[2] <- "SE"
 beta.team$team = reorder(beta.team$team,beta.team$Estimate)
 beta.team$class = recode(beta.team$class, TRUETRUE = "dynamic", FALSEFALSE = "static",FALSETRUE="persist",TRUEFALSE="covariate")
+
 ```
 
 
+#Figure 7: GAM fixed effects by model relative to DOY_mean (clim) model
 ```{r}
 jpeg(file=paste0(figureDirectory,"GAM_TeamsComparedToClim.jpeg"),width = 8, height = 5, units = "in",res=1000)
 ggplot(beta.team) + 
@@ -931,10 +993,9 @@ ggplot(beta.team) +
              ,colour=RColorBrewer::brewer.pal(4,"Dark2")[2])
 
 dev.off()
-
 ```
 
-## Site Effect
+#Figure 8: Site Effects in GAMs
 ```{r}
 ## site effect
 beta.site = as.data.frame(rbind(beta[1,],beta[grepl("site",row.names(beta)),])) %>% mutate(site=rownames(.)) 
@@ -1021,7 +1082,7 @@ dev.off()
 
 ```
 
-## site by team interactions
+#Figure S7: Site by team interactions
 ```{r}
 alpha = as.data.frame(summary(fit2i)$p.table) %>% mutate(lab = rownames(.)) %>% separate(lab,c("site","team"),sep = ":")  ## grab summary table
 #recode primary effects
@@ -1063,9 +1124,9 @@ dev.off()
 ## TODO: consistent site color scheme
 ```
 
-
+# Lead time plots (not included)
 ```{r}
-## Lead time plots (not included)
+
 hnew <- 1:35
 crps_horiz <- predict(fit2,data.frame(horizon=hnew,siteID="HARV",team="Persistence",phenoDate=0))
 plot(hnew,crps_horiz,xlab="Horizon",ylab="predicted CRPS",type="l",lwd=3)
@@ -1075,31 +1136,36 @@ pDnew2 <- -80:40
 crps_pD <- predict(fit2,data.frame(horizon=1,siteID="HARV",team="Persistence",phenoDate=pDnew2))
 plot(pDnew2,crps_pD,xlab="Days from 15%",ylab="predicted CRPS",lwd=3,type='l')
 abline(v=0,lty=2)
-print(paste("We are worst at predicting:",pDnew2[which.max(crps_pD)],"days before 15% green-up"))
+print(paste("We are worst when forecasting on:",pDnew2[which.max(crps_pD)],"days after 15% green-up"))
+
+crps_pD_time <- predict(fit2_time,data.frame(horizon=1,siteID="HARV",team="Persistence",phenoDate_time=pDnew2))
+plot(pDnew2,crps_pD_time,xlab="Days from 15%",ylab="predicted CRPS",lwd=3,type='l')
+abline(v=0,lty=2)
+print(paste("We are worst at forecasting:",pDnew2[which.max(crps_pD_time)],"days after 15% green-up"))
 
 plotPredictability <- function(trans){
   matchSite <- match(gcc_forecast_subset$siteID, allTransitions$siteID)
   if(trans==0.50){
-    gcc_forecast_subset2 <- gcc_forecast_subset %>% 
+    gcc_forecast_subset4 <- gcc_forecast_subset %>% 
       mutate(day85 = allTransitions$day85[matchSite],
              day50 = allTransitions$day50[matchSite],
              day15 = allTransitions$day15[matchSite],
-             phenoDate = lubridate::yday(start_time) - day50)
+             phenoDate = lubridate::yday(time) - day50)
   }else if(trans==0.15){
-    gcc_forecast_subset2 <- gcc_forecast_subset %>% 
+    gcc_forecast_subset4 <- gcc_forecast_subset %>% 
       mutate(day85 = allTransitions$day85[matchSite],
              day50 = allTransitions$day50[matchSite],
              day15 = allTransitions$day15[matchSite],
-             phenoDate = lubridate::yday(start_time) - day15)
+             phenoDate = lubridate::yday(time) - day15)
   }else if(trans==0.85){
-    gcc_forecast_subset2 <- gcc_forecast_subset %>% 
+    gcc_forecast_subset4 <- gcc_forecast_subset %>% 
       mutate(day85 = allTransitions$day85[matchSite],
              day50 = allTransitions$day50[matchSite],
              day15 = allTransitions$day15[matchSite],
-             phenoDate = lubridate::yday(start_time) - day85)
+             phenoDate = lubridate::yday(time) - day85)
   }
   fit <- gam(crps ~ siteID + s(horizon) + team + s(phenoDate), 
-             data = gcc_forecast_subset2,
+             data = gcc_forecast_subset4,
              method="REML")
   
   pDnew <- -80:40
@@ -1258,7 +1324,7 @@ lapply(fit4,summary)
 
 ```
 
-plots (extra)
+plots (extra and not included)
 ```{r,echo=FALSE}
 #mname = c("dynamic","persist","clim","covariate","static")
 mname <- mtype
@@ -1335,6 +1401,7 @@ legend("topleft",col=classCls,lwd = 3, lty=1, legend = mname,cex=1,ncol=3,bty="n
 
 ### LEAD TIME
 
+#Figure 4: GAM response surfaces with lead time
 ```{r}
 #Note: Need to edit legend outside of R to get dotted line to show
 jpeg(file=paste0(figureDirectory,"GAM_responseSurfaces.jpeg"),width = 10, height = 6, units = "in",res=1000)
@@ -1391,8 +1458,7 @@ dev.off()
 
 ```
 
-## Phenodate
-
+## Figure 6: Changes in CRPS based on date of submission of forecasts
 ```{r}
 jpeg(file=paste0(figureDirectory,"GAM_changedInCRPS.jpeg"),width = 6, height = 5.5, units = "in",res=1000)
 layout(matrix(c(1,1,2,2,2),ncol=1,byrow=TRUE))
@@ -1447,3 +1513,59 @@ legend("topleft",col=c(1,teamCls[toPlot5]),lwd = 2, lty=1,
 dev.off()
 ```
 
+#Figure 5: Fit the model where the forecasted days relative to 15% greenup is a predictor and look at how it differs between sites
+```{r}
+if(!file.exists("fit_time_site.RDS")){
+  fit_time_site <- list()
+  for(i in seq_along(site_names)){
+    print(i)
+    gcc_mtype <- gcc_forecast_subset2 %>% filter(siteID == site_names[i])
+    fit_time_site[[i]] <- try(mgcv::gam(crps ~ s(horizon) + s(phenoDate_time),
+                               data = gcc_mtype,
+                               method="REML"))
+    saveRDS(fit_time_site,file="fit_time_site.RDS")
+  }
+} else {
+  readRDS("fit_time_site.RDS")
+}
+names(fit_time_site) <- site_names
+lapply(fit_time_site,summary)
+
+pD_mtype <- gcc_forecast_subset2 %>%  group_by(siteID) %>%
+  summarise(min = min(phenoDate_time,na.rm = TRUE), max=max(phenoDate_time,na.rm = TRUE))
+pD_mtype$min[pD_mtype$min < -80] = -80 ## standardize start date
+crps_pD4 <- list()
+pDnew4 <- list()
+
+fit5a_time <- mgcv::gam(crps ~ s(horizon) + s(phenoDate_time),
+            data = gcc_forecast_subset2,
+            method="REML")
+crps_pD5a <- predict(fit5a_time,data.frame(horizon=1,phenoDate_time=-80:40))
+
+for(i in seq_along(site_names)){
+    pDnew4[[i]] <- pD_mtype$min[i]:pD_mtype$max[i]
+    crps_pD4[[i]] <- predict(fit_time_site[[i]],data.frame(horizon=1,phenoDate_time=pDnew4[[i]]))
+}
+sapply(crps_pD4,which.max) + sapply(pDnew4,min)
+#which.max(crps_pD5a)-80
+
+#By Site
+
+jpeg(file=paste0(figureDirectory,"GAM_time_bySite.jpeg"),width = 8, height = 4.5, units = "in",res=1000)
+plot(-80:40,crps_pD5a,xlab="Days After 15% Greenup",ylab=expression(paste("CRPS")),
+     type='l',lwd=5,xlim=c(-80,40),ylim=c(0,0.055),bty="n",main="")
+
+for(i in seq_along(site_names)){
+    y = crps_pD4[[i]]
+    lines(pDnew4[[i]],y,col=siteColors[i],lwd=3)
+    allTransitionDys$day85[allTransitionDys$siteID==site_names[i]]-
+      allTransitionDys$day15[allTransitionDys$siteID==site_names[i]]
+    abline(v=(allTransitionDys$day85[allTransitionDys$siteID==site_names[i]]-allTransitionDys$day15[allTransitionDys$siteID==site_names[i]]),lty=2,lwd=2,col=siteColors[i])
+}
+
+legend("topleft",col=c(1,siteColors),lwd = 3, lty=1, 
+       legend = c("all",site_full_names),cex=1,ncol=3,bty="n",y.intersp=1,x.intersp=0.3,
+       text.width = 20)
+
+dev.off()
+```
