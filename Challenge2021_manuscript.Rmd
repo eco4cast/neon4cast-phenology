@@ -33,6 +33,9 @@ cls[14] <- clsCopy[18]
 cls[18] <- clsCopy[14]
 cls[9] <- clsCopy[6]
 cls[6] <- clsCopy[9]
+cls[17] <- cls[16]
+cls[16] <- "#7570b3" #Want persistance to match class color 
+cls <- cls[1:n_teams]
 teamCls <- setNames(cls,teams)
 
 site_names <- c("HARV", "BART", "SCBI", "STEI", "UKFS", "GRSM", "DELA", "CLBJ")
@@ -52,6 +55,8 @@ siteLongs <- c(-72.173,-71.287,-78.140,-89.586,-95.192,-83.502,
 classCls <- c("#1b9e77","#d95f02","#7570b3","#e7298a","#FF0010")
 classCls <- setNames(classCls,c("covariate","dynamic","persist","static","clim"))
 figureDirectory <- "manuscriptFigures/"
+
+
 if(!dir.exists(figureDirectory)){
   dir.create(figureDirectory)
 }
@@ -665,7 +670,7 @@ p1 <- ggplot(d2,aes(as.numeric(as.character(forecastHorizon)),fct_reorder(tm,tmA
   theme_classic()+
   theme(axis.text.x = element_text(angle=90))+
   xlab("Forecast Horizon (Days)")+
-  ylab("Model")+
+  ylab("Density of Sites per Model")+
   scale_x_continuous(limits=c(0,35))+
   ggtitle("a) 15%")
 
@@ -890,7 +895,6 @@ meta[c("PEG","greenbears_gams","greenbears_stl","EFInull","Fourier"),"drivers"] 
 meta[c("PEG_RFR","PEG_RFR0","PEG_RFR2","DALEC_SIP","PhenoPhriends","greenbears_par","VT_Ph_GDD","EFI_U_P","Team_MODIS","CU_Pheno"),"drivers"] = TRUE
 
 meta["VT_Ph_GDD","type"] = "statistical"
-meta["PEG","type"] <- "dynamic"
 
 meta$class <- paste0(meta$drivers,meta$initial_conditions)
 meta$team <- rownames(meta)
@@ -900,6 +904,7 @@ meta$class[meta$team == "climatology"] = "clim"
 meta <- meta %>% mutate(team=replace(team,team=="climatology","DOY_Mean")) %>% mutate(team=replace(team,team=="EFInull","Persistence")) %>%
 mutate(team=replace(team,team=="UCSC_P_EDM","GPEDM"))
 row.names(meta) <- meta$team
+meta["PEG","class"] <- "TRUETRUE"
 
 ```
 
@@ -983,7 +988,7 @@ ggplot(beta.team) +
             alpha=0.75) +
   xlab("Model")+
  geom_errorbar( aes(x=team, ymin=Estimate-1.96*SE, ymax=Estimate+1.96*SE), width=0.4, colour="orange", alpha=0.9, size=1.3) +
-  coord_flip() + ylab("CRPS(Model) - CRPS(DOY Mean)") +theme(legend.position = c(0.85, 0.2), panel.background = element_blank()) +
+  coord_flip() + ylab("CRPS(Model) - CRPS(DOY Mean)") +theme(legend.position = c(0.85, 0.2), panel.background = element_blank(),axis.line=element_line()) +
   scale_fill_brewer(palette="Dark2")+
   geom_hline(yintercept = classEffect$mu[1],size=1,
              colour=RColorBrewer::brewer.pal(4,"Dark2")[4]) +
@@ -1073,10 +1078,10 @@ beta.site$siteFullName <- site_full_names[match(beta.site$site,names(site_full_n
 jpeg(file=paste0(figureDirectory,"GAM_siteCRPS.jpeg"),width = 7, height = 4, units = "in",res=1000)
 ggplot(beta.site) + 
   xlab("Site")+
-  geom_bar( aes(x=fct_reorder(siteFullName,Estimate), y=Estimate), stat="identity", fill="skyblue", alpha=0.5) +
+  geom_bar( aes(x=fct_reorder(siteFullName,day50), y=Estimate), stat="identity", fill="skyblue", alpha=0.5) +
   geom_errorbar( aes(x=siteFullName, ymin=Estimate-1.96*SE, ymax=Estimate+1.96*SE), width=0.4, colour="orange", alpha=0.9, size=1.3) +
   coord_flip() + ylab("CRPS") +
-  theme(panel.background = element_blank())
+  theme(panel.background = element_blank(),axis.line=element_line())
 ## TODO: RUN LM vs LAT; ORDER BY LAT OR GREENUP DATE (whichever is more significant), put in multi-panel; Color = usage elsewhere
 dev.off()
 
@@ -1199,13 +1204,14 @@ if(!file.exists("fit5.RDS")){
     fit5[[i]] <- try(mgcv::gam(crps ~ s(horizon) + s(phenoDate),
                                data = gcc_team,
                                method="REML"))
-    saveRDS(fit5,file="fit5.RDS")
   }
+  names(fit5) <- teams
+  lapply(fit5,summary)
+  saveRDS(fit5,file="fit5.RDS")
 }else {
   fit5 <- readRDS("fit5.RDS")
 }
-names(fit5) <- teams
-lapply(fit5,summary)
+
 
 ## "all model" equivalent for comparision
 fit5a <- mgcv::gam(crps ~ s(horizon) + s(phenoDate),
@@ -1265,7 +1271,7 @@ legend("topleft",col=cls[toPlot5],lwd = 2, lty=1, legend = teams[toPlot5],cex=0.
 
 pD_team <- gcc_forecast_subset2 %>%  group_by(team) %>%
   summarise(min = min(phenoDate,na.rm = TRUE), max=max(phenoDate,na.rm = TRUE))
-
+pD_team$team[pD_team$team==" DOY_Mean"] <- "DOY_Mean"
 crps_pD5 <- list()
 pDnew <- list()
 for(i in toPlot5){
@@ -1304,9 +1310,10 @@ fit
 #            method="REML")
 #summary(fit4)
 
-#mtype = unique(gcc_forecast_subset2$class)
-mtype <- names(classCls)
+
+
 if(!file.exists("fit4.RDS")){
+  mtype = unique(gcc_forecast_subset2$class)
   fit4 <- list()
   for(i in seq_along(mtype)){
     print(i)
@@ -1314,8 +1321,9 @@ if(!file.exists("fit4.RDS")){
     fit4[[i]] <- try(mgcv::gam(crps ~ s(horizon) + s(phenoDate),
                                data = gcc_mtype,
                                method="REML"))
-    saveRDS(fit4,file="fit4.RDS")
   }
+  mtype <- names(classCls)
+  saveRDS(fit4,file="fit4.RDS")
 } else {
   readRDS("fit4.RDS")
 }
@@ -1328,6 +1336,7 @@ plots (extra and not included)
 ```{r,echo=FALSE}
 #mname = c("dynamic","persist","clim","covariate","static")
 mname <- mtype
+mname[mname=="clim"] <- "DOY_Mean"
 
 ## horizon plot
 hnew <- 1:35
@@ -1404,7 +1413,7 @@ legend("topleft",col=classCls,lwd = 3, lty=1, legend = mname,cex=1,ncol=3,bty="n
 #Figure 4: GAM response surfaces with lead time
 ```{r}
 #Note: Need to edit legend outside of R to get dotted line to show
-jpeg(file=paste0(figureDirectory,"GAM_responseSurfaces.jpeg"),width = 10, height = 6, units = "in",res=1000)
+jpeg(file=paste0(figureDirectory,"GAM_responseSurfaces.jpeg"),width = 8, height = 5, units = "in",res=1000)
 layout(matrix(c(1,2,3,3),ncol=2,byrow=FALSE))
 par(mai=c(0.8,0.8,0.3,0.5))
 
@@ -1415,23 +1424,23 @@ par(mai=c(0.8,0.8,0.3,0.5))
 
 ## MODEL TYPE: CRPS
 plot(hnew,crps_horiz5a,xlab="",ylab="CRPS",
-     ylim=c(0,0.07),type='l',lwd=3,lty=1,bty="n",xaxt="n",main="")
+     ylim=c(0,0.075),type='l',lwd=3,lty=1,bty="n",xaxt="n",main="")
 title("a)", adj = 0)
 for(i in seq_along(mtype)){
     lines(hnew,crps_horiz4[[i]],col=classCls[i],lwd=3)
 }
 axis(1, at=seq(0,35,5),labels=rep("",8))
-legend("topleft",col=c("black",classCls,"black"),lwd = 3, lty=rep(1,6), legend = c("all",mname),cex=0.85,ncol=3,bty="n")
+legend("topleft",col=c("black",classCls,"black"),lwd = 3, lty=rep(1,6), legend = c("all",mname),cex=0.85,ncol=3,bty="n",text.width = 6,x.intersp=0.3)
 
 #MODEL TYPE: delCRPS
-plot(hnew,crps_horiz5a-crps_horiz5a[1],ylab=expression(paste(Delta, "CRPS")),xlab="Lead Time (Days)", ylim=c(-0.005,0.04),type='l',lwd=3,lty=1,bty="n",main="")
+plot(hnew,crps_horiz5a-crps_horiz5a[1],ylab=expression(paste(Delta, "CRPS")),xlab="Lead Time (Days)", ylim=c(-0.005,0.03),type='l',lwd=3,lty=1,bty="n",main="")
 title("b)", adj = 0)
 abline(h=0,lwd=4,lty=2)
 for(i in seq_along(mtype)){
   y = crps_horiz4[[i]]
   lines(hnew,y-y[1],col=classCls[i],lwd=3)
 }
-legend("topleft",col=c("black",classCls,"black"),lwd = 3, lty=c(rep(1,6),1), legend = c("all",mname,"=0"),cex=0.85,ncol=3,bty="n")
+legend("topleft",col=c("black",classCls,"black"),lwd = 3, lty=c(rep(1,6),1), legend = c("all",mname,"=0"),cex=0.85,ncol=3,bty="n",text.width = 6,x.intersp=0.3)
 # legend("topleft",col=cls[seq_along(mtype)],lwd = 3, lty=1, legend = mname,cex=0.75,ncol=3)
 
 ## MODEL
@@ -1445,14 +1454,14 @@ legend("topleft",col=c("black",classCls,"black"),lwd = 3, lty=c(rep(1,6),1), leg
 
 #MODEL: delCRPS
 plot(hnew,crps_horiz5a-crps_horiz5a[1],xlab="Lead Time (Days)",ylab=expression(paste(Delta, "CRPS")),
-     ylim=c(-0.02,0.05),type='l',lwd=3,lty=1,bty="n",main="")
+     ylim=c(-0.015,0.038),type='l',lwd=3,lty=1,bty="n",main="")
 title("c)", adj = 0)
 abline(h=0,lwd=4,lty=2)
-for(i in seq_along(toPlot5)){
-  y = crps_horiz5[[toPlot5[i]]]
-  lines(hnew,y-y[1],col=cls[toPlot5[i]],lwd=3)
+for(i in seq_along(teams)[-c(4,11)]){ #Note 4 and 11 are included because there were not enough submissions to fit the GAMs for the individaul models 
+  y = crps_horiz5[[i]]
+  lines(hnew,y-y[1],col=cls[i],lwd=3)
 }
-legend("topleft",col=c("black",cls[toPlot5],"black"),lwd = 2, lty=c(rep(1,length(toPlot5),1,2)), legend = c("all",teams[toPlot5],"=0"),cex=0.75,ncol=3,bty="n")
+legend("topleft",col=c("black",cls[-c(4,11)],"black"),lwd = 2, lty=c(rep(1,length(teams[-c(4,11)]),1,2)), legend = c("all",teams[-c(4,11)],"=0"),cex=0.85,ncol=2,bty="n",text.width = 12)
 dev.off()
 
 
@@ -1460,7 +1469,7 @@ dev.off()
 
 ## Figure 6: Changes in CRPS based on date of submission of forecasts
 ```{r}
-jpeg(file=paste0(figureDirectory,"GAM_changedInCRPS.jpeg"),width = 6, height = 5.5, units = "in",res=1000)
+jpeg(file=paste0(figureDirectory,"GAM_changedInCRPS.jpeg"),width = 6, height = 6, units = "in",res=1000)
 layout(matrix(c(1,1,2,2,2),ncol=1,byrow=TRUE))
 par(mai=c(0.7,0.8,0.3,1))
 ## phenoDate by CLASS
@@ -1478,7 +1487,7 @@ sapply(crps_pD4,which.max) + sapply(pDnew4,min)
 which.max(crps_pD5a)-80
 
 plot(-80:40,crps_pD5a-crps_pD5a[1],xlab="",ylab=expression(paste(Delta,"CRPS")),
-     type='l',lwd=5,xlim=c(-80,40),ylim=c(-0.0012,0.08),bty="n",main="",xaxt="n")
+     type='l',lwd=5,xlim=c(-40,40),ylim=c(-0.0012,0.07),bty="n",main="",xaxt="n")
 title("a)", adj = 0)
 axis(1, at=seq(-80,40,20),labels=rep("",7))
 for(i in seq_along(mtype)){
@@ -1488,8 +1497,8 @@ for(i in seq_along(mtype)){
 abline(v=0,lty=2,lwd=1)
 legend("topleft",col=c(1,classCls[seq_along(mtype)]),lwd = 3, lty=1, 
        legend = c("all",mname[1:4],"DOY_Mean"),cex=1,ncol=3,bty="n")
-#By Model
 
+#By Model
 crps_pD5 <- list()
 pDnew <- list()
 for(i in toPlot5){
@@ -1499,7 +1508,7 @@ for(i in toPlot5){
 }
 crps_pD5a <- predict(fit5a,data.frame(horizon=1,phenoDate=-80:40))
 plot(-80:40,crps_pD5a,ylab=expression(paste(Delta,"CRPS")),
-     ylim=c(-0.0012,0.08),type='n',lwd=5,xlim=c(-80,40),bty="n",main="",xlab="Days from 15% greenup")
+     ylim=c(-0.0012,0.08),type='n',lwd=5,xlim=c(-40,40),bty="n",main="",xlab="Days After 15% Greenup of Submission Date")
 title("b)", adj = 0)
 
 for(i in seq_along(toPlot5)){
@@ -1540,7 +1549,7 @@ pDnew4 <- list()
 fit5a_time <- mgcv::gam(crps ~ s(horizon) + s(phenoDate_time),
             data = gcc_forecast_subset2,
             method="REML")
-crps_pD5a <- predict(fit5a_time,data.frame(horizon=1,phenoDate_time=-80:40))
+crps_pD5a_time <- predict(fit5a_time,data.frame(horizon=1,phenoDate_time=-80:40))
 
 for(i in seq_along(site_names)){
     pDnew4[[i]] <- pD_mtype$min[i]:pD_mtype$max[i]
@@ -1552,20 +1561,35 @@ sapply(crps_pD4,which.max) + sapply(pDnew4,min)
 #By Site
 
 jpeg(file=paste0(figureDirectory,"GAM_time_bySite.jpeg"),width = 8, height = 4.5, units = "in",res=1000)
-plot(-80:40,crps_pD5a,xlab="Days After 15% Greenup",ylab=expression(paste("CRPS")),
-     type='l',lwd=5,xlim=c(-80,40),ylim=c(0,0.055),bty="n",main="")
-
+plot(-80:40,crps_pD5a_time,xlab="Days After 15% Greenup of Forecasted Date",ylab=expression(paste("CRPS")),
+     type='l',lwd=5,xlim=c(-20,40),ylim=c(0,0.055),bty="n",main="")
+maxCRPS <- numeric()
+greenupLengths <- numeric()
 for(i in seq_along(site_names)){
     y = crps_pD4[[i]]
     lines(pDnew4[[i]],y,col=siteColors[i],lwd=3)
+    maxCRPS <- c(maxCRPS,max(y))
+    greenupLengths <- c(greenupLengths,
+                        (allTransitionDys$day85[allTransitionDys$siteID==site_names[i]]-allTransitionDys$day15[allTransitionDys$siteID==site_names[i]]))
+    
     allTransitionDys$day85[allTransitionDys$siteID==site_names[i]]-
       allTransitionDys$day15[allTransitionDys$siteID==site_names[i]]
+    if(i==1){
+          abline(v=(allTransitionDys$day85[allTransitionDys$siteID==site_names[i]]-allTransitionDys$day15[allTransitionDys$siteID==site_names[i]]),lty=2,lwd=3,col=siteColors[i])
+    }else{
     abline(v=(allTransitionDys$day85[allTransitionDys$siteID==site_names[i]]-allTransitionDys$day15[allTransitionDys$siteID==site_names[i]]),lty=2,lwd=2,col=siteColors[i])
+    }
 }
 
 legend("topleft",col=c(1,siteColors),lwd = 3, lty=1, 
-       legend = c("all",site_full_names),cex=1,ncol=3,bty="n",y.intersp=1,x.intersp=0.3,
-       text.width = 20)
+       legend = c("all",site_full_names),cex=1,ncol=1,bty="n",y.intersp=1,x.intersp=0.3,
+       text.width = 12)
 
 dev.off()
+
+#plot(greenupLengths,maxCRPS,pch=20)
+mdl <- lm(maxCRPS~greenupLengths)
+summary(mdl)
+
+
 ```
