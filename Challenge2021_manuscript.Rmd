@@ -357,6 +357,7 @@ submitted <- apply(gccForecastsYes[targetRows,],1,sum)
 
 submissions <- tapply(gcc_forecast_subset$team,INDEX = gcc_forecast_subset$start_time,function(x){length(unique(x))})
 startDate <- as.Date(names(which.max(submissions)))
+startDate <- as.Date("2021-04-28")
 
 jpeg(file=paste0(figureDirectory,"exampleForecastsOnDay.jpeg"),width = 8.57, height = 6.01, units = "in",res = 1000)
 multi_team_plot(combined_forecasts = gcc_forecast_subset,  
