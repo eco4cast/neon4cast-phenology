@@ -54,6 +54,8 @@ siteLongs <- c(-72.173,-71.287,-78.140,-89.586,-95.192,-83.502,
 
 classCls <- c("#1b9e77","#d95f02","#7570b3","#e7298a","#FF0010")
 classCls <- setNames(classCls,c("covariate","dynamic","persist","static","clim"))
+mtype <- c("TRUEFALSE","TRUETRUE","FALSETRUE",'FALSEFALSE','clim')
+mtype <- setNames(mtype,c("covariate","dynamic","persist","static","clim"))
 figureDirectory <- "manuscriptFigures/"
 
 
@@ -208,7 +210,7 @@ for(tm in 1:n_teams){
 dev.off()
 ```
 
-##Extra Figures not currently in manuscript 
+##Extra Figures not currently in manuscript (need to run)
 ```{r, echo=FALSE}
 ## Time series figures
 site_number <- 1
@@ -600,7 +602,6 @@ legend("topleft",as.character(finalTms),col=plottedCls,lty=1,lwd=3,bty = "n")
 dev.off()
 ```
 
-
 ##Figure S6. Calculate the lead times that each model and site performed better than climatology (lower CRPS) for different transition dates
 ```{r}
 allForecastHorizons_clim <- matrix(nrow=0,ncol=4)
@@ -727,14 +728,14 @@ for(s in 1:n_sites){
 
 allMeans <- data.frame(allMeans)
 colnames(allMeans) <- c("Site","Transition","CRPS","CRPS_SD")
-allMeans$CRPS <- as.numeric(allMeans$CRPS)
-allMeans$CRPS_SD <- as.numeric(allMeans$CRPS_SD)
+allMeans$CRPS <- as.numeric(as.character(allMeans$CRPS))
+allMeans$CRPS_SD <- as.numeric(as.character(allMeans$CRPS_SD))
 allMeans$siteFullName <- site_full_names[match(allMeans$Site,names(site_full_names))]
 
 allAnomalies <- data.frame(allAnomalies)
 colnames(allAnomalies) <- c("Site","Transition","Anomaly","Anomaly_SD")
-allAnomalies$Anomaly <- as.numeric(allAnomalies$Anomaly)
-allAnomalies$Anomaly_SD <- as.numeric(allAnomalies$Anomaly_SD)
+allAnomalies$Anomaly <- as.numeric(as.character(allAnomalies$Anomaly))
+allAnomalies$Anomaly_SD <- as.numeric(as.character(allAnomalies$Anomaly_SD))
 allAnomalies$siteFullName <- site_full_names[match(allAnomalies$Site,names(site_full_names))]
 
 
@@ -759,151 +760,150 @@ ggplot(allAnomalies,aes(fill=Transition,y=Anomaly,x=siteFullName))+
   theme_bw()
 
 dev.off()
-
 ```
 
 
 ## Metadata processing for GAMs
 ```{r}
 if(!file.exists('gcc_forecast_subset_20220415.RData')){
-## grab the names of all the EMLs
-meta_reload = FALSE
-if(meta_reload){
-## New version
-obj <- arrow::s3_bucket("forecasts/phenology", endpoint_override="data.ecoforecast.org")
-obj$ls()  
-  
-## OLD: grab the names of all the EMLs
-obj <- aws.s3::get_bucket("forecasts",
-                               prefix = "phenology",
-                               region = "data",
-                               base_url = "ecoforecast.org",
-                               max = Inf)
-object = as.data.frame(obj)
-emls = which(tools::file_ext(object$Key) == "xml")
-## find the most recent for each team
-eparse <- gsub(pattern = "phenology-",replacement = "",x = basename(object$Key),fixed = TRUE)
-edate <- as.Date(substr(eparse,1,10))
-eteam <- substring(eparse,12)
-object = cbind(object,edate,eteam)
-## only 4 teams sent in EML!!!!
-toGrab = object[emls,] %>% group_by(eteam) %>% slice_max(edate)
-fname = rep(NA,nrow(toGrab))
-for(i in seq_along(fname)){
-  fname[i] = aws.s3::save_object(obj[[which(object[,"Key"]==toGrab$Key[i])]], 
-                        bucket = "forecasts", 
-                        region = "data",
-                        base_url = "ecoforecast.org")
-}
-
-nsobj<- aws.s3::get_bucket("forecasts",
+  ## grab the names of all the EMLs
+  meta_reload = FALSE
+  if(meta_reload){
+    ## New version
+    obj <- arrow::s3_bucket("forecasts/phenology", endpoint_override="data.ecoforecast.org")
+    obj$ls()  
+    
+    ## OLD: grab the names of all the EMLs
+    obj <- aws.s3::get_bucket("forecasts",
+                              prefix = "phenology",
+                              region = "data",
+                              base_url = "ecoforecast.org",
+                              max = Inf)
+    object = as.data.frame(obj)
+    emls = which(tools::file_ext(object$Key) == "xml")
+    ## find the most recent for each team
+    eparse <- gsub(pattern = "phenology-",replacement = "",x = basename(object$Key),fixed = TRUE)
+    edate <- as.Date(substr(eparse,1,10))
+    eteam <- substring(eparse,12)
+    object = cbind(object,edate,eteam)
+    ## only 4 teams sent in EML!!!!
+    toGrab = object[emls,] %>% group_by(eteam) %>% slice_max(edate)
+    fname = rep(NA,nrow(toGrab))
+    for(i in seq_along(fname)){
+      fname[i] = aws.s3::save_object(obj[[which(object[,"Key"]==toGrab$Key[i])]], 
+                                     bucket = "forecasts", 
+                                     region = "data",
+                                     base_url = "ecoforecast.org")
+    }
+    
+    nsobj<- aws.s3::get_bucket("forecasts",
                                prefix = "not_in_standard",
                                region = "data",
                                base_url = "ecoforecast.org",
                                max = Inf)
-nsobject = as.data.frame(nsobj)
-nsemls = which(tools::file_ext(nsobject$Key) %in% c("xml","eml","yml"))
-nsemls = nsemls[grepl("phenology",nsobject[nsemls,"Key"])]
-# nsobject[nsemls,"Key"]
-## one additional team had XML that failed to parse, and a couple more had .eml and .yml files
-toGrab = c("not_in_standard/phenology-metadata-VT_Ph_GDD.yml","not_in_standard/phenology-2021-05-09-CU_Pheno.yml","not_in_standard/phenology-2021-04-14-UCSC_P_EDM.eml","not_in_standard/phenology-2021-03-19-PEG.xml")
-fname2 = rep(NA,length(toGrab))
-for(i in seq_along(toGrab)){
-  fname2[i] = aws.s3::save_object(nsobj[[which(nsobject[,"Key"]==toGrab[i])]], 
-                        bucket = "forecasts", 
-                        region = "data",
-                        base_url = "ecoforecast.org")
-}
-fname = c(fname,fname2)
-fname
-} else {
-  ## LOAD XML FILES LOCALLY
-  fname = dir(pattern = "[exy]ml")
-}
-
-lexists <- function(list,name){
-  if(name %in% names(list)){
-    if(is.null(list[[name]])){
-      return(FALSE)
-    } else {
-      return(TRUE)
+    nsobject = as.data.frame(nsobj)
+    nsemls = which(tools::file_ext(nsobject$Key) %in% c("xml","eml","yml"))
+    nsemls = nsemls[grepl("phenology",nsobject[nsemls,"Key"])]
+    # nsobject[nsemls,"Key"]
+    ## one additional team had XML that failed to parse, and a couple more had .eml and .yml files
+    toGrab = c("not_in_standard/phenology-metadata-VT_Ph_GDD.yml","not_in_standard/phenology-2021-05-09-CU_Pheno.yml","not_in_standard/phenology-2021-04-14-UCSC_P_EDM.eml","not_in_standard/phenology-2021-03-19-PEG.xml")
+    fname2 = rep(NA,length(toGrab))
+    for(i in seq_along(toGrab)){
+      fname2[i] = aws.s3::save_object(nsobj[[which(nsobject[,"Key"]==toGrab[i])]], 
+                                      bucket = "forecasts", 
+                                      region = "data",
+                                      base_url = "ecoforecast.org")
     }
+    fname = c(fname,fname2)
+    fname
   } else {
-    return(FALSE)
+    ## LOAD XML FILES LOCALLY
+    fname = dir(pattern = "[exy]ml")
   }
-}
+  
+  lexists <- function(list,name){
+    if(name %in% names(list)){
+      if(is.null(list[[name]])){
+        return(FALSE)
+      } else {
+        return(TRUE)
+      }
+    } else {
+      return(FALSE)
+    }
+  }
 }
 ```
 
 
 ```{r}
 if(!file.exists('gcc_forecast_subset_20220415.RData')){
-## Things we want to pull out::
-## model type
-## for each uncertainty: status, complexity
-meta <- as.data.frame(matrix(NA,n_teams,13))
-row.names(meta) <- teams
-colnames(meta) <- c("type","name","drivers","ndrivers","initial_conditions","ninitial_conditions","parameters","nparameters","process_error","nprocess_error","obs_error","random_effects","nrandom_effects")
-for(i in seq_along(fname)){
-  j = names(unlist(tapply(teams,teams,grep,fname[i])))
-  if(tools::file_ext(fname[i]) %in% c("xml","eml")){
-    md <- EML::read_eml(fname[i])
-    md <- EML::eml_get(md, "additionalMetadata") %>% EML::eml_get("forecast")
-  } else {
-    md = yaml::read_yaml(fname[i])
-    md = md$metadata$forecast  
+  ## Things we want to pull out::
+  ## model type
+  ## for each uncertainty: status, complexity
+  meta <- as.data.frame(matrix(NA,n_teams,13))
+  row.names(meta) <- teams
+  colnames(meta) <- c("type","name","drivers","ndrivers","initial_conditions","ninitial_conditions","parameters","nparameters","process_error","nprocess_error","obs_error","random_effects","nrandom_effects")
+  for(i in seq_along(fname)){
+    j = names(unlist(tapply(teams,teams,grep,fname[i])))
+    if(tools::file_ext(fname[i]) %in% c("xml","eml")){
+      md <- EML::read_eml(fname[i])
+      md <- EML::eml_get(md, "additionalMetadata") %>% EML::eml_get("forecast")
+    } else {
+      md = yaml::read_yaml(fname[i])
+      md = md$metadata$forecast  
+    }
+    if(lexists(md,"model_description")){
+      meta[j,"type"] = md$model_description$type
+      if(lexists(md$model_description,"name"))    meta[j,"name"] = md$model_description$name
+    }
+    if(lexists(md,"drivers")){
+      if(lexists(md$drivers,"status")) meta[j,"drivers"] = md$drivers$status
+      if(lexists(md$drivers,"complexity")) meta[j,"ndrivers"] = md$drivers$complexity
+    }
+    if(lexists(md,"initial_conditions")){
+      if(lexists(md$initial_conditions,"status")) meta[j,"initial_conditions"] = md$initial_conditions$status
+      if(lexists(md$initial_conditions,"complexity")) meta[j,"ninitial_conditions"] = md$initial_conditions$complexity
+    }
+    if(lexists(md,"parameters")){
+      if(lexists(md$parameters,"status"))meta[j,"parameters"] = md$parameters$status
+      if(lexists(md$parameters,"complexity")) meta[j,"nparameters"] = md$parameters$complexity
+    }
+    if(lexists(md,"process_error")){
+      if(lexists(md$process_error,"status")) meta[j,"process_error"] = md$process_error$status
+      if(lexists(md$process_error,"complexity")) meta[j,"nprocess_error"] = md$process_error$complexity
+    }
+    if(lexists(md,"obs_error")){
+      if(lexists(md$obs_error,"status")) meta[j,"obs_error"] = md$obs_error$status
+    }
+    if(lexists(md,"random_effects")){
+      if(lexists(md$random_effects,"status")) meta[j,"random_effects"] = md$random_effects$status
+      if(lexists(md$random_effects,"complexity")) meta[j,"nrandom_effects"] = md$random_effects$complexity
+    }
   }
-  if(lexists(md,"model_description")){
-    meta[j,"type"] = md$model_description$type
-    if(lexists(md$model_description,"name"))    meta[j,"name"] = md$model_description$name
-  }
-  if(lexists(md,"drivers")){
-    if(lexists(md$drivers,"status")) meta[j,"drivers"] = md$drivers$status
-    if(lexists(md$drivers,"complexity")) meta[j,"ndrivers"] = md$drivers$complexity
-  }
-  if(lexists(md,"initial_conditions")){
-    if(lexists(md$initial_conditions,"status")) meta[j,"initial_conditions"] = md$initial_conditions$status
-    if(lexists(md$initial_conditions,"complexity")) meta[j,"ninitial_conditions"] = md$initial_conditions$complexity
-  }
-  if(lexists(md,"parameters")){
-    if(lexists(md$parameters,"status"))meta[j,"parameters"] = md$parameters$status
-    if(lexists(md$parameters,"complexity")) meta[j,"nparameters"] = md$parameters$complexity
-  }
-  if(lexists(md,"process_error")){
-    if(lexists(md$process_error,"status")) meta[j,"process_error"] = md$process_error$status
-    if(lexists(md$process_error,"complexity")) meta[j,"nprocess_error"] = md$process_error$complexity
-  }
-  if(lexists(md,"obs_error")){
-    if(lexists(md$obs_error,"status")) meta[j,"obs_error"] = md$obs_error$status
-  }
-  if(lexists(md,"random_effects")){
-    if(lexists(md$random_effects,"status")) meta[j,"random_effects"] = md$random_effects$status
-    if(lexists(md$random_effects,"complexity")) meta[j,"nrandom_effects"] = md$random_effects$complexity
-  }
-}
-
-## Recoding
-meta$drivers[meta$drivers == "absent"] = FALSE
-meta$drivers[!is.na(meta$drivers) & meta$drivers != FALSE] = TRUE
-meta$initial_conditions[meta$initial_conditions == "absent"] = FALSE
-meta$initial_conditions[!is.na(meta$initial_conditions) & meta$initial_conditions != FALSE] = TRUE
-
-## hacks
-meta[c("PEG","PEG_RFR2","greenbears_gams","greenbears_stl","VT_Ph_GDD","EFI_U_P","Fourier","Team_MODIS"),"initial_conditions"] = FALSE
-meta[c("PEG_RFR","PEG_RFR0","DALEC_SIP","PhenoPhriends","EFInull","CU_Pheno"),"initial_conditions"] = TRUE
-
-meta[c("PEG","greenbears_gams","greenbears_stl","EFInull","Fourier"),"drivers"] = FALSE
-meta[c("PEG_RFR","PEG_RFR0","PEG_RFR2","DALEC_SIP","PhenoPhriends","greenbears_par","VT_Ph_GDD","EFI_U_P","Team_MODIS","CU_Pheno"),"drivers"] = TRUE
-
-meta["VT_Ph_GDD","type"] = "statistical"
-
-meta$class <- paste0(meta$drivers,meta$initial_conditions)
-meta$team <- rownames(meta)
-meta$class[meta$team == "climatology"] = "clim"
+  
+  ## Recoding
+  meta$drivers[meta$drivers == "absent"] = FALSE
+  meta$drivers[!is.na(meta$drivers) & meta$drivers != FALSE] = TRUE
+  meta$initial_conditions[meta$initial_conditions == "absent"] = FALSE
+  meta$initial_conditions[!is.na(meta$initial_conditions) & meta$initial_conditions != FALSE] = TRUE
+  
+  ## hacks
+  meta[c("PEG","PEG_RFR2","greenbears_gams","greenbears_stl","VT_Ph_GDD","EFI_U_P","Fourier","Team_MODIS"),"initial_conditions"] = FALSE
+  meta[c("PEG_RFR","PEG_RFR0","DALEC_SIP","PhenoPhriends","EFInull","CU_Pheno"),"initial_conditions"] = TRUE
+  
+  meta[c("PEG","greenbears_gams","greenbears_stl","EFInull","Fourier"),"drivers"] = FALSE
+  meta[c("PEG_RFR","PEG_RFR0","PEG_RFR2","DALEC_SIP","PhenoPhriends","greenbears_par","VT_Ph_GDD","EFI_U_P","Team_MODIS","CU_Pheno"),"drivers"] = TRUE
+  
+  meta["VT_Ph_GDD","type"] = "statistical"
+  
+  meta$class <- paste0(meta$drivers,meta$initial_conditions)
+  meta$team <- rownames(meta)
+  meta$class[meta$team == "climatology"] = "clim"
 }
 
 meta <- meta %>% mutate(team=replace(team,team=="climatology","DOY_Mean")) %>% mutate(team=replace(team,team=="EFInull","Persistence")) %>%
-mutate(team=replace(team,team=="UCSC_P_EDM","GPEDM"))
+  mutate(team=replace(team,team=="UCSC_P_EDM","GPEDM"))
 row.names(meta) <- meta$team
 meta["PEG","class"] <- "TRUETRUE"
 
@@ -925,7 +925,8 @@ gcc_forecast_subset2 <- gcc_forecast_subset3 %>%
          phenoDate = lubridate::yday(start_time) - day15,
          phenoDate_time = lubridate::yday(time) - day15)
 
-#phenoDate is the number of days after the 15% green-up date
+#phenoDate is the number of days after the 15% green-up date of the submission date
+#phenoDate_time is number of days after 15% green-up of the forecasted date
 ```
 
 Linear models
@@ -999,6 +1000,14 @@ ggplot(beta.team) +
              ,colour=RColorBrewer::brewer.pal(4,"Dark2")[2])
 
 dev.off()
+
+#Check uncertainties in DOY_mean and greenbear_par
+gcc_forecast_subset_greenbearspar <- gcc_forecast_subset2[gcc_forecast_subset$team=="greenbears_par",]
+gcc_forecast_subset_DOYmean <- gcc_forecast_subset2[gcc_forecast_subset$team=="DOY_Mean",]
+
+mean(gcc_forecast_subset_DOYmean$sd,na.rm=TRUE)
+mean(gcc_forecast_subset_greenbearspar$sd,na.rm=TRUE) #Much lower standard deviation 
+t.test(gcc_forecast_subset_DOYmean$sd,gcc_forecast_subset_greenbearspar$sd)
 ```
 
 #Figure 8: Site Effects in GAMs
@@ -1201,7 +1210,11 @@ if(!file.exists("fit5.RDS")){
   fit5 <- list()
   for(i in seq_along(teams)){
     print(i)
-    gcc_team <- gcc_forecast_subset2 %>% filter(team == teams[i])
+    tm <- teams[i]
+    if(tm=="DOY_Mean"){
+      tm <- " DOY_Mean"
+    }
+    gcc_team <- gcc_forecast_subset2 %>% filter(team == tm)
     fit5[[i]] <- try(mgcv::gam(crps ~ s(horizon) + s(phenoDate),
                                data = gcc_team,
                                method="REML"))
@@ -1221,7 +1234,7 @@ fit5a <- mgcv::gam(crps ~ s(horizon) + s(phenoDate),
 
 ```
 
-plots (not included)
+plots not included, but some variables need to be made
 ```{r, echo=FALSE}
 ## horizon plot
 hnew <- 1:35
@@ -1311,10 +1324,7 @@ fit
 #            method="REML")
 #summary(fit4)
 
-
-
 if(!file.exists("fit4.RDS")){
-  mtype = unique(gcc_forecast_subset2$class)
   fit4 <- list()
   for(i in seq_along(mtype)){
     print(i)
@@ -1323,7 +1333,7 @@ if(!file.exists("fit4.RDS")){
                                data = gcc_mtype,
                                method="REML"))
   }
-  mtype <- names(classCls)
+  names(fit4) <- mtype
   saveRDS(fit4,file="fit4.RDS")
 } else {
   readRDS("fit4.RDS")
@@ -1333,10 +1343,10 @@ lapply(fit4,summary)
 
 ```
 
-plots (extra and not included)
+plots (extra and not included, but some of the variables need to be made)
 ```{r,echo=FALSE}
 #mname = c("dynamic","persist","clim","covariate","static")
-mname <- mtype
+mname <- names(mtype)
 mname[mname=="clim"] <- "DOY_Mean"
 
 ## horizon plot
@@ -1406,11 +1416,6 @@ legend("topleft",col=classCls,lwd = 3, lty=1, legend = mname,cex=1,ncol=3,bty="n
 
 ```
 
-
-# organize figures into multipanel plots
-
-### LEAD TIME
-
 #Figure 4: GAM response surfaces with lead time
 ```{r}
 #Note: Need to edit legend outside of R to get dotted line to show
@@ -1429,6 +1434,7 @@ plot(hnew,crps_horiz5a,xlab="",ylab="CRPS",
 title("a)", adj = 0)
 for(i in seq_along(mtype)){
     lines(hnew,crps_horiz4[[i]],col=classCls[i],lwd=3)
+  print(mean(crps_horiz4[[i]]))
 }
 axis(1, at=seq(0,35,5),labels=rep("",8))
 legend("topleft",col=c("black",classCls,"black"),lwd = 3, lty=rep(1,6), legend = c("all",mname),cex=0.85,ncol=3,bty="n",text.width = 6,x.intersp=0.3)
