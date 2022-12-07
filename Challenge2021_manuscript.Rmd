@@ -45,6 +45,7 @@ site_full_names <- c("Harvard","Bartlett","Smithsonian",
                      "Dead Lake","Lyndon B. Johnson")
 siteColors <- brewer.pal(name="Accent", n = 8)
 siteColors[4] <- "cyan"
+siteColors <- setNames(siteColors,site_names)
 
 site_full_names <- setNames(site_full_names,site_names)
 n_sites <- length(site_names)
@@ -213,8 +214,20 @@ for(tm in 1:n_teams){
 dev.off()
 ```
 
-##Supplementary Figure S2
+##Supplementary Figure S1 and S2
 ```{r, echo=FALSE}
+#Bar plot of the number of submissions per team
+barDat <- gcc_forecast_subset %>% group_by(team) %>% summarise(n=n())
+
+jpeg(file=paste0(figureDirectory,"numberOfSubmissionsPerTeam.jpg"),height=4,width=7,units="in",res=1000)
+ggplot(barDat, aes(y=log(n),x=fct_reorder(team,n))) +
+  geom_bar(position="dodge", stat="identity",color="grey31") +
+  ggthemes::theme_base() +
+  xlab("Model") +
+  ylab("Number of Submissions (Log Scale)")+
+  coord_flip()+theme(panel.background = element_blank(),axis.line=element_line(),panel.border = element_blank(),plot.background=element_blank())
+dev.off()
+  
 ## Time series figures
 site_number <- 1
 targetDay <- allTransitions$day15[site_number]
@@ -657,22 +670,26 @@ d$tmMax[(d$tmMax=="-Inf")] <- NA
 
 d$tmAvg[as.character(d$tm)=="PEG_RFR2" & d$trans==0.15] <- 0.99 #Hack to get ordering correct
 
-jpeg(file=paste0(figureDirectory,"ForecastHorizonsAtTransitionDates.jpg"),width = 8, height = 4.5, units = "in",res=1000)
+jpeg(file=paste0(figureDirectory,"ForecastHorizonsAtTransitionDates.jpg"),width = 9, height = 4.5, units = "in",res=1000)
 d2 <- d[d$trans==0.15,]
 p1 <- ggplot(d2,aes(as.numeric(as.character(forecastHorizon)),fct_reorder(tm,tmAvg))) +
   geom_density_ridges2(scale=1)+
-  theme_classic()+
-  theme(axis.text.x = element_text(angle=90))+
   xlab("Forecast Horizon (Days)")+
   ylab("Density of Sites per Model")+
   scale_x_continuous(limits=c(0,35))+
-  ggtitle("a) 15%")
+  ggtitle("a) 15%")+
+  ggthemes::theme_base()+
+  theme(axis.text.x = element_text(angle=90),panel.background = element_blank(),axis.line=element_line(),panel.border = element_blank(),
+                                                             plot.background=element_blank(),
+        plot.title = element_text(face="plain"))
 
 d2 <- d[d$trans==0.85,]
 p2 <- ggplot(d2,aes(as.numeric(as.character(forecastHorizon)),fct_reorder(tm,tmAvg))) +
   geom_density_ridges2(scale=1)+
-  theme_classic()+
-  theme(axis.text.x = element_text(angle=90))+
+  ggthemes::theme_base()+
+  theme(axis.text.x = element_text(angle=90),panel.background = element_blank(),axis.line=element_line(),panel.border = element_blank(),
+                                                             plot.background=element_blank(),
+        plot.title = element_text(face="plain"))+
   xlab("Forecast Horizon (Days)")+
   ylab("")+
   scale_x_continuous(limits=c(0,35))+
@@ -737,20 +754,23 @@ ggplot(allMeans,aes(fill=Transition,y=CRPS,x=siteFullName))+
   geom_bar(position=position_dodge(),stat="identity")+  
   geom_errorbar(aes(ymin=CRPS-CRPS_SD,ymax=CRPS+CRPS_SD), width=0.4, colour="black", size=0.5,position=position_dodge(0.9))+
   xlab("Site")+
-  theme_bw()
-
+  ggthemes::theme_base()+theme(panel.background = element_blank(),axis.line=element_line(),panel.border = element_blank(),
+                                                             plot.background=element_blank())
+  
 dev.off()
 
 ##Supplementary Figure
-jpeg(file=paste0(figureDirectory,"transitionDate_anomalies.jpeg"),width = 9, height = 5, units = "in",res=1000)
+jpeg(file=paste0(figureDirectory,"transitionDate_anomalies.jpeg"),width = 8, height = 5, units = "in",res=1000)
 
 ggplot(allAnomalies,aes(fill=Transition,y=Anomaly,x=siteFullName))+
   geom_bar(position=position_dodge(),stat="identity")+  
   geom_errorbar(aes(ymin=Anomaly- 1.000001 *Anomaly_SD,ymax=Anomaly+1.000001*Anomaly_SD), width=0.4, colour="black", size=0.5,position=position_dodge(0.9))+
   ylab("Days After Historical Average")+
   xlab("Site")+
-  theme_bw()
-
+  ggthemes::theme_base()+theme(panel.background = element_blank(),axis.line=element_line(),panel.border = element_blank(),
+                                                             plot.background=element_blank(),
+                               axis.text.x = element_text(angle = 90,
+                                              hjust = 0.5, vjust = 0.5))
 dev.off()
 ```
 
@@ -1004,7 +1024,7 @@ mean(gcc_forecast_subset_greenbearspar$sd,na.rm=TRUE) #Much lower standard devia
 t.test(gcc_forecast_subset_DOYmean$sd,gcc_forecast_subset_greenbearspar$sd)
 ```
 
-#Figure 8: Site Effects in GAMs
+#Figure 8 ans S9: Site Effects in GAMs
 ```{r}
 ## site effect
 beta.site = as.data.frame(rbind(beta[1,],beta[grepl("site",row.names(beta)),])) %>% mutate(site=rownames(.)) 
@@ -1028,51 +1048,57 @@ for(s in 1:nrow(beta.site)){
                                allAnomalies$Transition=="85%"),'Anomaly']
 }
 
-jpeg(file=paste0(figureDirectory,"sitePredictability_LinearRegressions.jpeg"),width = 7, height = 4, units = "in",res=1000)
-par(mai=c(0.6,0.6,0.1,0.1))
+jpeg(file=paste0(figureDirectory,"sitePredictability_LinearRegressions.jpeg"),width = 7, height = 4.5, units = "in",res=1000)
+par(mai=c(0.6,0.6,0.4,0.1))
 par(mfrow=c(2,3))
 
 siteLM = lm(Estimate ~ day15,beta.site)
-plot(beta.site$day15,beta.site$Estimate,xlab="DOY of 15% Greenup",ylab="Site Predictability",pch=20)
+plot(beta.site$day15,beta.site$Estimate,xlab="DOY of 15% Greenup",ylab="Site Predictability",pch=20,bty="n")
+title("a)", adj = 0)
 abline(siteLM)
 sm <- summary(siteLM)
 text(80,0.0078,paste('p-value:',round(sm$coefficients[2,4],digits=3)),pos=4)
-text(80,0.007,paste('R2:',round(sm$r.squared,digits=3)),pos=4)
+text(80,0.007,parse(text=paste0("R^2",":",round(sm$r.squared,digits=3))),pos=4)
 
 siteLM = lm(Estimate ~ day50,beta.site)
-plot(beta.site$day50,beta.site$Estimate,xlab="DOY of 50% Greenup",ylab="",pch=20)
+plot(beta.site$day50,beta.site$Estimate,xlab="DOY of 50% Greenup",ylab="",pch=20,bty="n")
 abline(siteLM)
+title("b)", adj = 0)
 sm <- summary(siteLM)
 text(87,0.0078,paste('p-value:',round(sm$coefficients[2,4],digits=3)),pos=4)
-text(87,0.007,paste('R2:',round(sm$r.squared,digits=3)),pos=4)
+text(87,0.007,parse(text=paste0("R^2",":",round(sm$r.squared,digits=3))),pos=4)
 
 siteLM = lm(Estimate ~ day85,beta.site)
-plot(beta.site$day85,beta.site$Estimate,xlab="DOY of 85% Greenup",ylab="",pch=20)
+plot(beta.site$day85,beta.site$Estimate,xlab="DOY of 85% Greenup",ylab="",pch=20,bty="n")
 abline(siteLM)
+title("c)", adj = 0)
 sm <- summary(siteLM)
 text(93,0.0078,paste('p-value:',round(sm$coefficients[2,4],digits=3)),pos=4)
-text(93,0.007,paste('R2:',round(sm$r.squared,digits=3)),pos=4)
+text(93,0.007,parse(text=paste0("R^2",":",round(sm$r.squared,digits=3))),pos=4)
 
 siteLM = lm(Estimate ~ anomaly15,beta.site)
-plot(beta.site$anomaly15,beta.site$Estimate,xlab="DOY Anomaly of 15% Greenup",ylab="Site Predictability",pch=20)
+plot(beta.site$anomaly15,beta.site$Estimate,xlab="DOY Anomaly of 15% Greenup",ylab="Site Predictability",pch=20,bty="n")
+title("d)", adj = 0)
 abline(siteLM)
 sm <- summary(siteLM)
 text(-6,0.004,paste('p-value:',round(sm$coefficients[2,4],digits=3)),pos=4)
-text(-6,0.0032,paste('R2:',round(sm$r.squared,digits=3)),pos=4)
+text(-6,0.0032,parse(text=paste0("R^2",":",round(sm$r.squared,digits=3))),pos=4)
 
 siteLM = lm(Estimate ~ anomaly50,beta.site)
-plot(beta.site$anomaly50,beta.site$Estimate,xlab="DOY Anomaly of 50% Greenup",ylab="",pch=20)
+plot(beta.site$anomaly50,beta.site$Estimate,xlab="DOY Anomaly of 50% Greenup",ylab="",pch=20,bty="n")
 abline(siteLM)
+title("e)", adj = 0)
 sm <- summary(siteLM)
 text(-6,0.004,paste('p-value:',round(sm$coefficients[2,4],digits=3)),pos=4)
-text(-6,0.0032,paste('R2:',round(sm$r.squared,digits=3)),pos=4)
+text(-6,0.0032,parse(text=paste0("R^2",":",round(sm$r.squared,digits=3))),pos=4)
 
 siteLM = lm(Estimate ~ anomaly85,beta.site)
-plot(beta.site$anomaly85,beta.site$Estimate,xlab="DOY Anomaly of 85% Greenup",ylab="",pch=20)
+plot(beta.site$anomaly85,beta.site$Estimate,xlab="DOY Anomaly of 85% Greenup",ylab="",pch=20,bty="n")
 abline(siteLM)
+title("f)", adj = 0)
 sm <- summary(siteLM)
 text(-6.5,0.004,paste('p-value:',round(sm$coefficients[2,4],digits=3)),pos=4)
-text(-6.5,0.0032,paste('R2:',round(sm$r.squared,digits=3)),pos=4)
+text(-6.5,0.0032,parse(text=paste0("R^2",":",round(sm$r.squared,digits=3))),pos=4)
 
 dev.off()
 
@@ -1129,9 +1155,12 @@ ggplot(alpha) + aes(x=team, y=Estimate,fill=site) +
   geom_bar(stat="identity",  alpha=alpha$sig+0.3, position = "dodge") + scale_alpha(range = c(0.1, 0.9)) +
 #  geom_errorbar( aes(x=team, ymin=Estimate-1.96*SE, ymax=Estimate+1.96*SE), width=0.4, colour="orange", alpha=0.9, position="dodge") +
   coord_flip() + ylab("CRPS") +
-  theme_bw()
+  xlab("Model")+
+  theme_base() +
+  theme(panel.background = element_blank(),axis.line=element_line(),panel.border = element_blank(),plot.background=element_blank(),legend.position = c(0.75,0.4))+
+    ggplot2::scale_fill_manual(values = siteColors)
 dev.off()
-## TODO: consistent site color scheme
+
 ```
 
 # Lead time plots (not included)
