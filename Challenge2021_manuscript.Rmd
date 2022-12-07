@@ -17,6 +17,7 @@ library(mgcv)
 library(ggridges)
 library(gridExtra)
 library(RColorBrewer)
+library(ggthemes)
 ```
 
 ##General Variables
@@ -161,6 +162,7 @@ par(mfrow=c(1,2),mai=c(1,2,0.3,0.1))
 site_number <- 1 #Harvard example
 #for(s in 1:length(site_names)){
 gccForecastsYes <- data.frame(matrix(ncol=n_teams,nrow=length(challengeDays)))
+teamOrder <- rev(c(18,16,17,15,14,13,9,8,2,12,11,10,7,1,6,5,4,3))
 for(tm in 1:n_teams){
   tmDat <- gcc_forecast_subset[gcc_forecast_subset$team==teams[tm],] #Subset by team
   tmSitDat <- tmDat[tmDat$siteID==site_names[site_number],] #Subset by site
@@ -174,12 +176,12 @@ colnames(gccForecastsYes) <- teams
 
 #Plot first team and then add on subsequent teams onto the graph
 tm <- 18
-
+gccForecastsYes <- gccForecastsYes[,teamOrder]
 plot(challengeDays[gccForecastsYes[,tm]],rep(tm,length(challengeDays))[gccForecastsYes[,tm]],pch=20,
-     xlab="Time",ylab="",ylim=c(0,n_teams),bty="n",yaxt="n",main="a) Forecasted Days")
-axis(side = 2,at=seq(1,n_teams),labels=teams,pos=as.Date("2021-01-20"),las=1)
+     xlab="Date",ylab="",ylim=c(0,n_teams),bty="n",yaxt="n",main="a) Forecasted Days",font.main=1)
+axis(side = 2,at=seq(1,n_teams),labels=teams[teamOrder],pos=as.Date("2021-01-20"),las=1)
 
-polygon(x=c(min(tranDates),min(tranDates),max(tranDates),max(tranDates)),y=c(-0.9,n_teams+1,n_teams+1,-0.9),col="chartreuse3",border=NA)
+polygon(x=c(min(tranDates),min(tranDates),max(tranDates),max(tranDates)),y=c(-0.9,n_teams+1,n_teams+1,-0.9),col="gray",border=NA)
 for(tm in 1:n_teams){
   points(challengeDays[gccForecastsYes[,tm]],rep(tm,length(challengeDays))[gccForecastsYes[,tm]],pch=20)
 }
@@ -200,17 +202,18 @@ colnames(gccForecastsYes) <- teams
 
 tm <- 18
 par(mai=c(1,0.1,0.3,2))
+gccForecastsYes <- gccForecastsYes[,teamOrder]
 plot(challengeDays[gccForecastsYes[,tm]],rep(tm,length(challengeDays))[gccForecastsYes[,tm]],pch=20,
-     xlab="Time",ylab="",ylim=c(0,n_teams),bty="n",yaxt="n",main="b) Submission Days",xlim=range(challengeDays))
+     xlab="Date",ylab="",ylim=c(0,n_teams),bty="n",yaxt="n",main="b) Submission Days",xlim=range(challengeDays),font.main=1)
 
-polygon(x=c(min(tranDates),min(tranDates),max(tranDates),max(tranDates)),y=c(-0.9,n_teams+1,n_teams+1,-0.9),col="chartreuse3",border=NA)
+polygon(x=c(min(tranDates),min(tranDates),max(tranDates),max(tranDates)),y=c(-0.9,n_teams+1,n_teams+1,-0.9),col="gray",border=NA)
 for(tm in 1:n_teams){
   points(challengeDays[gccForecastsYes[,tm]],rep(tm,length(challengeDays))[gccForecastsYes[,tm]],pch=20)
 }
 dev.off()
 ```
 
-##Extra Figures not currently in manuscript (need to run)
+##Supplementary Figure S2
 ```{r, echo=FALSE}
 ## Time series figures
 site_number <- 1
@@ -222,25 +225,12 @@ submitted <- apply(gccForecastsYes[targetRows,],1,sum)
 startDate <- challengeDays[as.numeric(names(which.max(submitted)))]
   
 submissions <- tapply(gcc_forecast_subset$team,INDEX = gcc_forecast_subset$start_time,function(x){length(unique(x))})
-plot(as.Date(names(submissions)),submissions,xlab="Forecast Start Time",pch=20, ylab= "Submissions",main="Total Teams Submitting on Each Day")
 
+submissions <- tapply(gcc_forecast_subset$team,INDEX = gcc_forecast_subset$start_time,function(x){length(x)})
 
-##Extra Figures (not currently in manuscript)
-HF <- subset(gcc_forecast_subset, siteID == site_names[site_number])
-submissions <- tapply(HF$team,INDEX = HF$start_time,function(x){length(unique(x))})
-plot(as.Date(names(submissions)),submissions,xlab="Forecast Start Time",pch=20, ylab= "Submissions")
-
-ts <- subset(gcc_forecast_subset, start_time == startDate & siteID == site_names[site_number])
-ts.teams <- unique(ts$team)
-
-ts %>%
- filter(time >= startDate & time <= (startDate+35)) %>%
- ggplot() +
-  aes(x = time, y = mean, colour = team, group = team) +
-  geom_line(size = 0.5) +
-  scale_color_hue(direction = 1) +
-  labs(title="Harvard Forest") + ylab("Greenness") +
-  theme_minimal()
+jpeg(file=paste0(figureDirectory,"numberOfSubmissionsOverTime.jpg"),height=4,width=5,units="in",res=1000)
+plot(as.Date(names(submissions)),submissions,xlab="Forecast Submission Date",pch=20, ylab= "Total Submissions",main="",bty="n")
+dev.off()
 
 ```
 
@@ -309,25 +299,27 @@ multi_team_plot <- function(combined_forecasts, target, theme, date, horizon, si
   p <- combined_forecasts %>%
     ggplot2::ggplot(aes(x = time, color = team)) +
     ggplot2::geom_line(aes(y = mean)) +
+    ggthemes::theme_base()+
     ggplot2::geom_ribbon(aes(x = time, ymin = lower95, ymax = upper95, fill = team), alpha = 0.2) +
     ggplot2::geom_point(aes(y = obs), color = "black", alpha = 0.4) +
     ggplot2::labs(y = "GCC", x = "Time",fill='team') +
-    ggplot2::theme_bw() +
     ggplot2::scale_color_manual(values = specificTeamCls) +
     ggplot2::scale_fill_manual(values = specificTeamCls)+
     theme(panel.border = element_blank(), panel.grid.major = element_blank(),
-panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))
+panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"),
+plot.background = element_blank(),panel.background = element_blank())
+  
   if(is.na(siteID)){
   p <- p + ggplot2::theme(axis.text.x = element_text(angle = 90,
                                               hjust = 0.5, vjust = 0.5))
-  }else{
-  p <- p + ggplot2::theme(axis.text.x = element_text(angle = 90,
-                                              hjust = 0.5, vjust = 0.5,
-                                              size = 20),
-                          axis.text.y=element_text(size=20),
-                          axis.title=element_text(size=25))
-  p <- p + ggtitle("")
-  }
+  }#else{
+  # p <- p + ggplot2::theme(axis.text.x = element_text(angle = 45,
+  #                                             hjust = 0.5, vjust = 0.5,
+  #                                             size = 20),
+  #                         axis.text.y=element_text(size=20),
+  #                         axis.title=element_text(size=25))
+  # p <- p + ggtitle("")
+  # }
 
   if(class(combined_forecasts$time[1])[1] != "Date"){
     #p <- p + ggplot2::scale_x_datetime(date_labels = scales::date_format("%Y-%m-%d"))
@@ -337,7 +329,7 @@ panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))
   }
   if(length(date) > 1  & length(siteID_subset) > 1){
     
-    p + facet_grid(rows = vars(start_time), cols = vars(siteID))
+    p + facet_grid(rows = vars(start_time), cols = vars(siteID)) 
     
   }else if(length(date) > 1  & length(siteID_subset) == 1){
     
@@ -345,7 +337,7 @@ panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))
     
   }else if(length(date) == 1  & length(siteID_subset) > 1){
     
-    p + facet_wrap(vars(siteID))
+    p + facet_wrap(vars(siteID),scales='free_y')
     
   }else{
   p
@@ -370,7 +362,7 @@ multi_team_plot(combined_forecasts = gcc_forecast_subset,
 dev.off()
 
 startDate <- as.Date("2021-05-11")
-jpeg(file=paste0(figureDirectory,"exampleForecastsOnDay_Harvard.jpeg"),width = 9.5, height = 6, units = "in",res = 1000)
+jpeg(file=paste0(figureDirectory,"exampleForecastsOnDay_Harvard.jpeg"),width = 10, height = 6, units = "in",res = 1000)
 multi_team_plot(combined_forecasts = gcc_forecast_subset, 
                 target = "gcc_90", 
                 theme = "phenology", 
