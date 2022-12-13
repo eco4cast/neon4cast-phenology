@@ -1,6 +1,6 @@
 ---
 title: "EFI NEON Phenology forecasting challenge"
-author: "EFI NEON Phenology working group"
+author: "EFI NEON Phenology working group (Primarily Kathryn Wheeler and Michael Dietze)"
 output: html_document
 ---
 
@@ -19,6 +19,12 @@ library(gridExtra)
 library(RColorBrewer)
 library(ggthemes)
 ```
+
+This script includes the code for the analyses and figure making for the manuscript analyzing the 2021 spring phenology forecast challenge: Predicting spring phenology in deciduous broadleaf forests: An open community forecast challenge
+
+Forecasts should be downloaded from the google drive: gcc_forecast_subset_20220415.RData on  https://drive.google.com/drive/folders/10ckh3-PDtNzHnUyPTvUmTqARgdarl32f
+
+Some figures were further edited outside of R for aesthetics. 
 
 ##General Variables
 ```{r}
@@ -89,10 +95,10 @@ dev.off()
 ```
 
 ##Grab Forecasts and Organize Data
-Forecasts can either be downloaded from:
-1) The google drive: gcc_forecast_subset_20220415.RData on  https://drive.google.com/drive/folders/10ckh3-PDtNzHnUyPTvUmTqARgdarl32f
-or
-2) The Aws server, which requires a special compilation of the package arrow
+Forecasts should be downloaded from the google drive: gcc_forecast_subset_20220415.RData on  https://drive.google.com/drive/folders/10ckh3-PDtNzHnUyPTvUmTqARgdarl32f
+
+Note: The code that we used to download the forecasts from the AWS server is included below for completeness, but we cannot guarantee that this code will work or reproduce results when used as the server access changes. 
+
 ```{r,echo=FALSE}
 if(file.exists('gcc_forecast_subset_20220415.RData')){
   load('gcc_forecast_subset_20220415.RData') 
@@ -102,7 +108,7 @@ if(file.exists('gcc_forecast_subset_20220415.RData')){
   ##gcc_forecast_subset2
   ##gcc_forecast_subset3
   ##meta 
-}else{
+}else{ 
   ## grab and load forecast (updated based on Slack code snippet from Quinn)
   remotes::install_github("eco4cast/neon4cast")
   s <- neon4cast::score_schema() 
@@ -1134,7 +1140,7 @@ colnames(alpha)[2] <- "SE"
 alpha$Estimate[2:8] = alpha$Estimate[2:8] + alpha$Estimate[1] ## rescale mean
 alpha$SE[2:8] = sqrt(alpha$SE[2:8]^2 + alpha$SE[1]^2 + 2*vcov(fit2i)[2:8,1]) ## rescale SE
 # add site means to all other terms
-aS <- alpha[1:8,] %>%  select(Estimate:SE,site) %>% rename(Smu = Estimate,Sse=SE) ## pull out site effects
+aS <- alpha[1:8,] %>%  dplyr::select(Estimate:SE,site) %>% rename(Smu = Estimate,Sse=SE) ## pull out site effects
 alpha = alpha %>% left_join(aS,by="site") %>%  ## add site effects as column
   mutate(Smu=if_else(team=="DOY_Mean",0,Smu),Sse=if_else(team=="DOY_Mean",0,Sse)) %>%  ## set default case to 0
   mutate(Estimate = Estimate + Smu,SE = sqrt(SE^2 + Sse^2)) ##update stats
@@ -1220,8 +1226,6 @@ plotPredictability(trans=0.50)
 plotPredictability(trans=0.85)
 ```
 
-
-
 *GAM: Horizon and phenoDate by team*
 fits
 ```{r, echo=FALSE}
@@ -1258,7 +1262,7 @@ fit5a <- mgcv::gam(crps ~ s(horizon) + s(phenoDate),
 
 ```
 
-plots not included, but some variables need to be made
+plots not included, but some variables need to be created to use later
 ```{r, echo=FALSE}
 ## horizon plot
 hnew <- 1:35
@@ -1360,7 +1364,7 @@ if(!file.exists("fit4.RDS")){
   names(fit4) <- mtype
   saveRDS(fit4,file="fit4.RDS")
 } else {
-  readRDS("fit4.RDS")
+  fit4 <- readRDS("fit4.RDS")
 }
 names(fit4) <- mtype
 lapply(fit4,summary)
@@ -1474,15 +1478,6 @@ for(i in seq_along(mtype)){
 legend("topleft",col=c("black",classCls,"black"),lwd = 3, lty=c(rep(1,6),1), legend = c("all",mname,"=0"),cex=0.85,ncol=3,bty="n",text.width = 6,x.intersp=0.3)
 # legend("topleft",col=cls[seq_along(mtype)],lwd = 3, lty=1, legend = mname,cex=0.75,ncol=3)
 
-## MODEL
-# plot(hnew,crps_horiz5a,xlab="Lead Time",ylab="predicted CRPS",
-#      ylim=h5range,type='l',lwd=1,lty=2)
-# for(i in seq_along(toPlot5)){
-#   y = crps_horiz5[[toPlot5[i]]]
-#   lines(hnew,y,col=cls[i],lwd=3)
-# }
-# legend("topleft",col=cls,lwd = 2, lty=1, legend = teams[toPlot5],cex=0.5,ncol=3)
-
 #MODEL: delCRPS
 plot(hnew,crps_horiz5a-crps_horiz5a[1],xlab="Lead Time (Days)",ylab=expression(paste(Delta, "CRPS")),
      ylim=c(-0.015,0.038),type='l',lwd=3,lty=1,bty="n",main="")
@@ -1494,8 +1489,6 @@ for(i in seq_along(teams)[-c(4,11)]){ #Note 4 and 11 are included because there 
 }
 legend("topleft",col=c("black",cls[-c(4,11)],"black"),lwd = 2, lty=c(rep(1,length(teams[-c(4,11)]),1,2)), legend = c("all",teams[-c(4,11)],"=0"),cex=0.85,ncol=2,bty="n",text.width = 12)
 dev.off()
-
-
 ```
 
 ## Figure 6: Changes in CRPS based on date of submission of forecasts
@@ -1566,7 +1559,7 @@ if(!file.exists("fit_time_site.RDS")){
     saveRDS(fit_time_site,file="fit_time_site.RDS")
   }
 }else {
-  readRDS("fit_time_site.RDS")
+  fit_time_site <- readRDS("fit_time_site.RDS")
 }
 names(fit_time_site) <- site_names
 lapply(fit_time_site,summary)
@@ -1621,6 +1614,5 @@ dev.off()
 #plot(greenupLengths,maxCRPS,pch=20)
 mdl <- lm(maxCRPS~greenupLengths)
 summary(mdl)
-
 
 ```
