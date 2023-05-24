@@ -185,7 +185,8 @@ colnames(gccForecastsYes) <- teams
 tm <- 18
 gccForecastsYes <- gccForecastsYes[,teamOrder]
 plot(challengeDays[gccForecastsYes[,tm]],rep(tm,length(challengeDays))[gccForecastsYes[,tm]],pch=20,
-     xlab="Date",ylab="",ylim=c(0,n_teams),bty="n",yaxt="n",main="a) Forecasted Days",font.main=1)
+     xlab="Date",ylab="",ylim=c(0,n_teams),bty="n",yaxt="n",main="",font.main=1)
+title("a) Forecasted Dates", adj = 0)
 axis(side = 2,at=seq(1,n_teams),labels=teams[teamOrder],pos=as.Date("2021-01-20"),las=1)
 
 polygon(x=c(min(tranDates),min(tranDates),max(tranDates),max(tranDates)),y=c(-0.9,n_teams+1,n_teams+1,-0.9),col="gray",border=NA)
@@ -211,7 +212,8 @@ tm <- 18
 par(mai=c(1,0.1,0.3,2))
 gccForecastsYes <- gccForecastsYes[,teamOrder]
 plot(challengeDays[gccForecastsYes[,tm]],rep(tm,length(challengeDays))[gccForecastsYes[,tm]],pch=20,
-     xlab="Date",ylab="",ylim=c(0,n_teams),bty="n",yaxt="n",main="b) Submission Days",xlim=range(challengeDays),font.main=1)
+     xlab="Date",ylab="",ylim=c(0,n_teams),bty="n",yaxt="n",main="",xlim=range(challengeDays),font.main=1)
+title("b) Submission Dates", adj = 0)
 
 polygon(x=c(min(tranDates),min(tranDates),max(tranDates),max(tranDates)),y=c(-0.9,n_teams+1,n_teams+1,-0.9),col="gray",border=NA)
 for(tm in 1:n_teams){
@@ -458,11 +460,11 @@ plotForecastedValuesOverTime <- function(all_site_number, gcc_forecast_subset,st
         vl <- rescale(vl,to=c(0,1),from=c(allTransitions$minimum[site_number],allTransitions$maximum[site_number])) ##Rescales gcc values between 0 and 1
       }
       if(multipleSites){
-        plot(x=numeric(),y=numeric(),type="l",xlim=c(0,35),ylim=ylims,ylab="",xlab="",main="",bty="n",axes = FALSE)
+        plot(x=numeric(),y=numeric(),type="l",xlim=c(-35,0),ylim=ylims,ylab="",xlab="",main="",bty="n",axes = FALSE)
         if(site_number==all_site_number[1]){
-          axis(1, at=seq(0,35,5),labels=rep("",8))
+          axis(1, at=seq(-35,0,5),labels=rep("",8))
         }else if(site_number==all_site_number[2]){
-          axis(1, at=seq(0,35,5),labels=seq(0,35,5))
+          axis(1, at=seq(-35,0,5),labels=seq(-35,0,5))
         }
         if(t==2){
           axis(2, at=seq(ylims[1],ylims[2],length.out = 5),labels=seq(ylims[1],ylims[2],length.out = 5))
@@ -470,7 +472,7 @@ plotForecastedValuesOverTime <- function(all_site_number, gcc_forecast_subset,st
           axis(2, at=seq(ylims[1],ylims[2],length.out = 5),labels=rep("",5))
         }
       }else{
-        plot(x=numeric(),y=numeric(),type="l",xlim=c(0,35),ylim=ylims,ylab="",xlab="Lead Time",main=tle,bty="n")
+        plot(x=numeric(),y=numeric(),type="l",xlim=c(-35,0),ylim=ylims,ylab="",xlab="Lead Time",main=tle,bty="n")
       }
       if(statistic=="GCC"){
         abline(h=vl,col="black",lwd=5,lty=2)
@@ -525,7 +527,7 @@ plotForecastedValuesOverTime <- function(all_site_number, gcc_forecast_subset,st
               computedStat <- organizedDat$sd
             }
           }
-          lines(leadTimes,computedStat,col=cls[tm],lwd=2)
+          lines(-1*leadTimes,computedStat,col=cls[tm],lwd=2)
         }
       }
     }
@@ -535,15 +537,16 @@ plotForecastedValuesOverTime <- function(all_site_number, gcc_forecast_subset,st
     }
   }
 }
-  
 
+jpeg(file=paste0(figureDirectory,"forecastedValuesOfTransitionDates.jpeg"),width = 9, height = 5, units = "in",res = 1000) ##Figure S4
+plotForecastedValuesOverTime(all_site_number=c(8,2),gcc_forecast_subset=gcc_forecast_subset,statistic = "GCC", ylims=c(0.32,0.46),rescaled=FALSE,trans=c(2,8))
+dev.off()
+
+##Extra Figures
 jpeg(file=paste0(figureDirectory,"forecastedValuesOfTransitionDates_rescaled.jpeg"),width = 9, height = 5, units = "in",res = 1000) #Not included for simplicity
 plotForecastedValuesOverTime(all_site_number=c(8,2),gcc_forecast_subset=gcc_forecast_subset,statistic = "GCC", ylims = c(0,1), rescaled=TRUE,trans=c(2,8))
 dev.off()
 
-jpeg(file=paste0(figureDirectory,"forecastedValuesOfTransitionDates.jpeg"),width = 9, height = 5, units = "in",res = 1000)
-plotForecastedValuesOverTime(all_site_number=c(8,2),gcc_forecast_subset=gcc_forecast_subset,statistic = "GCC", ylims=c(0.32,0.46),rescaled=FALSE,trans=c(2,8))
-dev.off()
 
 jpeg(file=paste0(figureDirectory,"BiasvsLeadTimeTrans.jpeg"),width = 9, height = 5, units = "in",res = 1000) #Not included for simplicity
 plotForecastedValuesOverTime(all_site_number=c(6,2),gcc_forecast_subset=gcc_forecast_subset,statistic = "bias", ylims=c(-0.05,0.12),rescaled=FALSE)
@@ -577,12 +580,12 @@ for(site_number in all_site_number){
     vl <- as.numeric(allTransitions[site_number,(t+1)])
     sdVal <- allTransitions[site_number,(t+2)]
     
-    plot(x=numeric(),y=numeric(),type="l",xlim=c(0,35),ylim=ylims[ct,],ylab="",xlab="",main="",bty="n",xaxt="n")
+    plot(x=numeric(),y=numeric(),type="l",xlim=c(-35,0),ylim=ylims[ct,],ylab="",xlab="",main="",bty="n",xaxt="n")
     ct <- ct+1
     if(site_number==all_site_number[1]){
-      axis(1, at=seq(0,35,5),labels=rep("",8))
+      axis(1, at=seq(-35,0,5),labels=rep("",8))
     }else if(site_number==all_site_number[2]){
-      axis(1, at=seq(0,35,5),labels=seq(0,35,5))
+      axis(1, at=seq(-35,0,5),labels=seq(-35,0,5))
     }
     
     for(tm in 1:n_teams){
@@ -602,7 +605,7 @@ for(site_number in all_site_number){
         
         leadTimes <- tranDate-as.Date(organizedDat$start_time)
         computedStat <- organizedDat$crps
-        lines(leadTimes,computedStat,col=cls[tm],lwd=2)
+        lines(-1*leadTimes,computedStat,col=cls[tm],lwd=2)
       }
     }
   }
@@ -1457,35 +1460,35 @@ par(mai=c(0.8,0.8,0.3,0.5))
 # axis(1, at=seq(0,35,5),labels=rep("",8))
 
 ## MODEL TYPE: CRPS
-plot(hnew,crps_horiz5a,xlab="",ylab="CRPS",
-     ylim=c(0,0.075),type='l',lwd=3,lty=1,bty="n",xaxt="n",main="")
+plot(-1*hnew,crps_horiz5a,xlab="",ylab="CRPS",
+     ylim=c(0,0.08),type='l',lwd=3,lty=1,bty="n",xaxt="n",main="")
 title("a)", adj = 0)
 for(i in seq_along(mtype)){
-    lines(hnew,crps_horiz4[[i]],col=classCls[i],lwd=3)
+    lines(-1*hnew,crps_horiz4[[i]],col=classCls[i],lwd=3)
   print(mean(crps_horiz4[[i]]))
 }
-axis(1, at=seq(0,35,5),labels=rep("",8))
+axis(1, at=seq(-35,0,5),labels=rep("",8))
 legend("topleft",col=c("black",classCls,"black"),lwd = 3, lty=rep(1,6), legend = c("all",mname),cex=0.85,ncol=3,bty="n",text.width = 6,x.intersp=0.3)
 
 #MODEL TYPE: delCRPS
-plot(hnew,crps_horiz5a-crps_horiz5a[1],ylab=expression(paste(Delta, "CRPS")),xlab="Lead Time (Days)", ylim=c(-0.005,0.03),type='l',lwd=3,lty=1,bty="n",main="")
+plot(-1*hnew,crps_horiz5a-crps_horiz5a[1],ylab=expression("CRPS - CRPS"["time=0"]),xlab="Lead Time (Days)", ylim=c(-0.005,0.035),type='l',lwd=3,lty=1,bty="n",main="")
 title("b)", adj = 0)
 abline(h=0,lwd=4,lty=2)
 for(i in seq_along(mtype)){
   y = crps_horiz4[[i]]
-  lines(hnew,y-y[1],col=classCls[i],lwd=3)
+  lines(-1*hnew,y-y[1],col=classCls[i],lwd=3)
 }
-legend("topleft",col=c("black",classCls,"black"),lwd = 3, lty=c(rep(1,6),1), legend = c("all",mname,"=0"),cex=0.85,ncol=3,bty="n",text.width = 6,x.intersp=0.3)
+legend("topright",col=c("black",classCls,"black"),lwd = 3, lty=c(rep(1,6),1), legend = c("all",mname,"=0"),cex=0.85,ncol=3,bty="n",text.width = 6,x.intersp=0.3)
 # legend("topleft",col=cls[seq_along(mtype)],lwd = 3, lty=1, legend = mname,cex=0.75,ncol=3)
 
 #MODEL: delCRPS
-plot(hnew,crps_horiz5a-crps_horiz5a[1],xlab="Lead Time (Days)",ylab=expression(paste(Delta, "CRPS")),
-     ylim=c(-0.015,0.038),type='l',lwd=3,lty=1,bty="n",main="")
+plot(-1*hnew,crps_horiz5a-crps_horiz5a[1],xlab="Lead Time (Days)",ylab=expression("CRPS - CRPS"["time=0"]),
+     ylim=c(-0.015,0.045),type='l',lwd=3,lty=1,bty="n",main="")
 title("c)", adj = 0)
 abline(h=0,lwd=4,lty=2)
 for(i in seq_along(teams)[-c(4,11)]){ #Note 4 and 11 are included because there were not enough submissions to fit the GAMs for the individaul models 
   y = crps_horiz5[[i]]
-  lines(hnew,y-y[1],col=cls[i],lwd=3)
+  lines(-1*hnew,y-y[1],col=cls[i],lwd=3)
 }
 legend("topleft",col=c("black",cls[-c(4,11)],"black"),lwd = 2, lty=c(rep(1,length(teams[-c(4,11)]),1,2)), legend = c("all",teams[-c(4,11)],"=0"),cex=0.85,ncol=2,bty="n",text.width = 12)
 dev.off()
@@ -1510,7 +1513,7 @@ names(fit4)
 sapply(crps_pD4,which.max) + sapply(pDnew4,min)
 which.max(crps_pD5a)-80
 
-plot(-80:40,crps_pD5a-crps_pD5a[1],xlab="",ylab=expression(paste(Delta,"CRPS")),
+plot(-80:40,crps_pD5a-crps_pD5a[1],xlab="",ylab=expression("CRPS - CRPS"["time=0"]),
      type='l',lwd=5,xlim=c(-40,40),ylim=c(-0.0012,0.07),bty="n",main="",xaxt="n")
 title("a)", adj = 0)
 axis(1, at=seq(-80,40,20),labels=rep("",7))
@@ -1531,7 +1534,7 @@ for(i in toPlot5){
     crps_pD5[[i]] <- predict(fit5[[i]],data.frame(horizon=1,phenoDate=pDnew[[i]]))
 }
 crps_pD5a <- predict(fit5a,data.frame(horizon=1,phenoDate=-80:40))
-plot(-80:40,crps_pD5a,ylab=expression(paste(Delta,"CRPS")),
+plot(-80:40,crps_pD5a,ylab="CRPS",
      ylim=c(-0.0012,0.08),type='n',lwd=5,xlim=c(-40,40),bty="n",main="",xlab="Days After 15% Greenup of Submission Date")
 title("b)", adj = 0)
 
@@ -1584,9 +1587,12 @@ sapply(crps_pD4,which.max) + sapply(pDnew4,min)
 
 #By Site
 
-jpeg(file=paste0(figureDirectory,"GAM_time_bySite.jpeg"),width = 8, height = 4.5, units = "in",res=1000)
-plot(-80:40,crps_pD5a_time,xlab="Days After 15% Greenup of Forecasted Date",ylab=expression(paste("CRPS")),
+jpeg(file=paste0(figureDirectory,"GAM_time_bySite.jpeg"),width = 8, height = 3, units = "in",res=1000)
+layout(matrix(c(1,1,2),ncol=3,byrow=FALSE))
+par(mai=c(0.8,0.8,0.3,0.1))
+plot(-80:40,crps_pD5a_time,xlab="Days After 15% Greenup of Forecasted Date",ylab="CRPS",
      type='l',lwd=5,xlim=c(-20,40),ylim=c(0,0.055),bty="n",main="")
+title("a)", adj = 0)
 maxCRPS <- numeric()
 greenupLengths <- numeric()
 for(i in seq_along(site_names)){
@@ -1609,10 +1615,11 @@ legend("topleft",col=c(1,siteColors[order(allTransitionDys$day85 - allTransition
        legend = c("all",site_full_names[order(allTransitionDys$day85 - allTransitionDys$day15)]),cex=1,ncol=1,bty="n",y.intersp=1,x.intersp=0.3,
        text.width = 12)
 
-dev.off()
-
-#plot(greenupLengths,maxCRPS,pch=20)
 mdl <- lm(maxCRPS~greenupLengths)
 summary(mdl)
+plot(greenupLengths,maxCRPS,pch=20,main="",xlab="Greenup Length (Days)",ylab="Site Max CRPS",bty="n",cex=2,col=siteColors)
+title("b)", adj = 0)
+abline(mdl,lwd=3)
+dev.off()
 
 ```
