@@ -1460,35 +1460,35 @@ par(mai=c(0.8,0.8,0.3,0.5))
 # axis(1, at=seq(0,35,5),labels=rep("",8))
 
 ## MODEL TYPE: CRPS
-plot(-1*hnew,crps_horiz5a,xlab="",ylab="CRPS",
+plot(hnew,crps_horiz5a,xlab="",ylab="CRPS",
      ylim=c(0,0.08),type='l',lwd=3,lty=1,bty="n",xaxt="n",main="")
 title("a)", adj = 0)
 for(i in seq_along(mtype)){
-    lines(-1*hnew,crps_horiz4[[i]],col=classCls[i],lwd=3)
+    lines(hnew,crps_horiz4[[i]],col=classCls[i],lwd=3)
   print(mean(crps_horiz4[[i]]))
 }
-axis(1, at=seq(-35,0,5),labels=rep("",8))
+axis(1, at=seq(0,35,5),labels=rep("",8))
 legend("topleft",col=c("black",classCls,"black"),lwd = 3, lty=rep(1,6), legend = c("all",mname),cex=0.85,ncol=3,bty="n",text.width = 6,x.intersp=0.3)
 
 #MODEL TYPE: delCRPS
-plot(-1*hnew,crps_horiz5a-crps_horiz5a[1],ylab=expression("CRPS - CRPS"["time=0"]),xlab="Lead Time (Days)", ylim=c(-0.005,0.035),type='l',lwd=3,lty=1,bty="n",main="")
+plot(hnew,crps_horiz5a-crps_horiz5a[1],ylab=expression("CRPS - CRPS"["Lead Time=1"]),xlab="Lead Time (Days)", ylim=c(-0.005,0.035),type='l',lwd=3,lty=1,bty="n",main="")
 title("b)", adj = 0)
 abline(h=0,lwd=4,lty=2)
 for(i in seq_along(mtype)){
   y = crps_horiz4[[i]]
-  lines(-1*hnew,y-y[1],col=classCls[i],lwd=3)
+  lines(hnew,y-y[1],col=classCls[i],lwd=3)
 }
-legend("topright",col=c("black",classCls,"black"),lwd = 3, lty=c(rep(1,6),1), legend = c("all",mname,"=0"),cex=0.85,ncol=3,bty="n",text.width = 6,x.intersp=0.3)
+legend("topleft",col=c("black",classCls,"black"),lwd = 3, lty=c(rep(1,6),1), legend = c("all",mname,"=0"),cex=0.85,ncol=3,bty="n",text.width = 6,x.intersp=0.3)
 # legend("topleft",col=cls[seq_along(mtype)],lwd = 3, lty=1, legend = mname,cex=0.75,ncol=3)
 
 #MODEL: delCRPS
-plot(-1*hnew,crps_horiz5a-crps_horiz5a[1],xlab="Lead Time (Days)",ylab=expression("CRPS - CRPS"["time=0"]),
+plot(hnew,crps_horiz5a-crps_horiz5a[1],xlab="Lead Time (Days)",ylab=expression("CRPS - CRPS"["Lead Time=1"]),
      ylim=c(-0.015,0.045),type='l',lwd=3,lty=1,bty="n",main="")
 title("c)", adj = 0)
 abline(h=0,lwd=4,lty=2)
 for(i in seq_along(teams)[-c(4,11)]){ #Note 4 and 11 are included because there were not enough submissions to fit the GAMs for the individaul models 
   y = crps_horiz5[[i]]
-  lines(-1*hnew,y-y[1],col=cls[i],lwd=3)
+  lines(hnew,y-y[1],col=cls[i],lwd=3)
 }
 legend("topleft",col=c("black",cls[-c(4,11)],"black"),lwd = 2, lty=c(rep(1,length(teams[-c(4,11)]),1,2)), legend = c("all",teams[-c(4,11)],"=0"),cex=0.85,ncol=2,bty="n",text.width = 12)
 dev.off()
@@ -1513,7 +1513,7 @@ names(fit4)
 sapply(crps_pD4,which.max) + sapply(pDnew4,min)
 which.max(crps_pD5a)-80
 
-plot(-80:40,crps_pD5a-crps_pD5a[1],xlab="",ylab=expression("CRPS - CRPS"["time=0"]),
+plot(-80:40,crps_pD5a-crps_pD5a[1],xlab="",ylab=expression("CRPS - CRPS"["phenodate=-80"]),
      type='l',lwd=5,xlim=c(-40,40),ylim=c(-0.0012,0.07),bty="n",main="",xaxt="n")
 title("a)", adj = 0)
 axis(1, at=seq(-80,40,20),labels=rep("",7))
