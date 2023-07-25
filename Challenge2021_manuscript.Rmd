@@ -233,7 +233,7 @@ dev.off()
 #' @export
 #'
 #' @examples
-multi_team_plot <- function(combined_forecasts, target, theme, date, horizon, siteID = NA, team = NA){
+multi_team_plot <- function(combined_forecasts, target, theme, date, horizon, siteID = NA, team = NA, addSD = FALSE){
   curr_theme <- theme
   
   theme_forecasts <- combined_forecasts %>%
@@ -277,18 +277,34 @@ multi_team_plot <- function(combined_forecasts, target, theme, date, horizon, si
   }else{
     specificTeamCls <- teamCls
   }
+  if(addSD){
+    if(siteID=="HARV"){
+      targetData = read.csv('https://phenocam.nau.edu/data/archive/harvard/ROI/harvard_DB_0001_1day.csv',skip=22)
+      targetData <- targetData %>% mutate(time=date) %>%dplyr::select(time,gcc_std)
+      combined_forecasts$time <- as.character(combined_forecasts$time)
+      combined_forecasts <- left_join(combined_forecasts,targetData,by=c('time'))
+      combined_forecasts$time <- as.Date(combined_forecasts$time)
+    }else{
+      print("Error: Can only add sd for HARV")
+      return()
+    }
+
+  }
   p <- combined_forecasts %>%
     ggplot2::ggplot(aes(x = time, color = team)) +
     ggplot2::geom_line(aes(y = mean)) +
     ggthemes::theme_base()+
     ggplot2::geom_ribbon(aes(x = time, ymin = lower95, ymax = upper95, fill = team), alpha = 0.2) +
-    ggplot2::geom_point(aes(y = obs), color = "black", alpha = 0.4) +
+    ggplot2::geom_point(aes(y = obs), color = "black", alpha = 0.4,cex=0.9) +
     ggplot2::labs(y = "GCC", x = "Time",fill='team') +
     ggplot2::scale_color_manual(values = specificTeamCls) +
     ggplot2::scale_fill_manual(values = specificTeamCls)+
     theme(panel.border = element_blank(), panel.grid.major = element_blank(),
           panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"),
           plot.background = element_blank(),panel.background = element_blank())
+  if(addSD){
+    p = p+ ggplot2::geom_errorbar(aes(ymin=obs-gcc_std, ymax=obs+gcc_std), width=.2,colour="black")
+  }
   
   if(is.na(siteID)){
     p <- p + ggplot2::theme(axis.text.x = element_text(angle = 90,
@@ -337,7 +353,8 @@ multi_team_plot(combined_forecasts = gcc_forecasts,
                 theme = "phenology", 
                 date = as.Date("2021-05-11"), 
                 horizon = 35,
-                siteID = "HARV")
+                siteID = "HARV",
+                addSD = TRUE)
 dev.off()
 ```
 
